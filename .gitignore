@@ -1,0 +1,46 @@
+# Secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Expo
+.expo/
+web-build/
+
+# ML artifacts
+*.pt
+*.h5
+*.pkl
+# Testing artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Claude Code local settings
+.claude/
