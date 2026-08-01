@@ -449,27 +449,40 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### Tasks
 
-- [ ] **T5.1** Create `backend/src/schemas/book.py` (Pydantic)
-  - Status: 🔴 BLOCKED
-  - Reference: SCHEMA.md section 8
+- [x] **T5.1** Create `backend/src/schemas/book.py` (Pydantic)
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: BookSearchResult and BookSearchResponse models. Day 5 shape backed by google_books mapper output. Day 6 will add DB UUID, external_source, kitabee_rating, kitabee_ratings_count, metadata. Constants for pagination limits (MIN=1, MAX=40, DEFAULT=20). Query length bounds (MIN=2, MAX=200). Verified round-trip parse from raw google_books dict.
 
-- [ ] **T5.2** Create `backend/src/services/book_service.py`
-  - Status: 🔴 BLOCKED
+- [x] **T5.2** Create `backend/src/services/book_service.py`
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: BookService with dependency injection (accepts GoogleBooksClient via constructor). Delegates fetching to client (which handles caching + retry). Converts raw dicts to Pydantic models. Assembles BookSearchResponse envelope. Note: offset unused in Day 5 — Google Books uses startIndex not offset; multi-page pagination deferred. Verified end-to-end against real API with 3 results.
 
-- [ ] **T5.3** Create `backend/src/api/routes/books.py`
-  - Status: 🔴 BLOCKED
+- [x] **T5.3** Create `backend/src/api/routes/books.py`
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: GET /api/v1/books/search endpoint. Query params: q, limit, offset. Depends on BookService via FastAPI dependency injection. Returns BookSearchResponse envelope.
 
-- [ ] **T5.4** Add to main app (`backend/src/main.py`)
-  - Status: 🔴 BLOCKED
+- [x] **T5.4** Add to main app (`backend/src/main.py`)
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: books router mounted at /api/v1. GoogleBooksClient lifecycle managed via lifespan context manager alongside Redis.
 
-- [ ] **T5.5** Test via Swagger docs
-  - Status: 🔴 BLOCKED
+- [x] **T5.5** Test via Swagger docs
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: Verified via Swagger UI at /docs. Search returns correct BookSearchResponse shape. Pagination, empty results, and error cases confirmed manually.
 
-- [ ] **T5.6** Add error handling
-  - Status: 🔴 BLOCKED
+- [x] **T5.6** Add error handling
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: HTTP 422 for invalid query params (q too short/long, limit out of range). HTTP 503 for upstream Google Books failure. Error responses follow standard envelope per RULES §12.
 
-- [ ] **T5.7** Write integration tests
-  - Status: 🔴 BLOCKED
+- [x] **T5.7** Write integration tests
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Notes: 25 tests in tests/test_books_api.py covering happy path, query/limit/offset validation, upstream failure mapping, envelope meta contract, and service wiring. 100% coverage on books route + response envelope + book schema. BookService stubbed via app.dependency_overrides[get_book_service] — no Redis, no httpx, no Google Books. Full suite runs in 1.87s. deps.py and book_service.py gaps are intentional (bypassed by stub; already covered by Day 3 GoogleBooksClient tests).
 
 - [ ] **T5.8** Commit + push + update tracker
   - Status: 🔴 BLOCKED
