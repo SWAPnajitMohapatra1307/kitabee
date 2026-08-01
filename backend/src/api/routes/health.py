@@ -34,5 +34,5 @@ async def cache_metrics() -> JSONResponse:
     """
     info = await redis_client.get_info()
     return JSONResponse(
-        content=success_envelope({"connected": bool(info), "info": info})
+        content=success_envelope({"connected": info is not None, "info": info})
     )

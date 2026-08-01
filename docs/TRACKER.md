@@ -484,39 +484,72 @@ Build async client for Google Books API with retry logic and error handling.
   - Completed: 2026-07-17
   - Notes: 25 tests in tests/test_books_api.py covering happy path, query/limit/offset validation, upstream failure mapping, envelope meta contract, and service wiring. 100% coverage on books route + response envelope + book schema. BookService stubbed via app.dependency_overrides[get_book_service] — no Redis, no httpx, no Google Books. Full suite runs in 1.87s. deps.py and book_service.py gaps are intentional (bypassed by stub; already covered by Day 3 GoogleBooksClient tests).
 
-- [ ] **T5.8** Commit + push + update tracker
-  - Status: 🔴 BLOCKED
-
----
+- [x] **T5.8** Commit + push + update tracker
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Commit: d6e3748
+  - Notes: 25 tests, 137 passing total. Milestone M3 unlocked.
 
 ## 📖 DAY 6: Book Details Endpoint
 
 ### 📊 Day Progress
 ```
-░░░░░░░░░░ 0% (0/6 tasks)
+██████████ 100% (6/6 tasks)
 ```
+
 
 ### Tasks
 
-- [ ] **T6.1** Add book DB repository (`backend/src/database/crud/book.py`)
-  - Status: 🔴 BLOCKED
+- [x] **T6.1** Add book DB repository (`backend/src/database/crud/book.py`)
+  - Status: ✅ DONE
+  - Completed: 2026-07-18
+  - Notes: get_book_by_id, get_book_by_external_id, upsert_book_from_google.
+    Insert-or-update pattern using lookup + IntegrityError fallback.
+    Field mapping: google_books_id→external_id, categories→genres,
+    thumbnail_url→cover_url, published_date(str)→published_year(int).
+    Import Book from src.database.base (not models.book) — circular import
+    trap with current registry layout.
 
-- [ ] **T6.2** Update book service with DB persistence
-  - Status: 🔴 BLOCKED
+- [x] **T6.2** Update book service with DB persistence
+  - Status: ✅ DONE
+  - Completed: 2026-07-18
+  - Notes: BookService now takes AsyncSession alongside GoogleBooksClient.
+    search() persists each result to DB as side-effect (failures logged,
+    never bubble up). get_by_id() reads from DB by UUID only.
+    get_by_google_id() does DB→API cache-through. get_similar() builds
+    author+genre query, fetches from Google Books, filters source book,
+    persists results. deps.py updated to wire get_db into get_book_service.
 
-- [ ] **T6.3** Create details endpoint (`GET /api/v1/books/{book_id}`)
-  - Status: 🔴 BLOCKED
+- [x] **T6.3** Create details endpoint (`GET /api/v1/books/{book_id}`)
+  - Status: ✅ DONE
+  - Completed: 2026-07-18
+  - Notes: UUID path param. 404 on unknown UUID. 503 on TransientAPIError.
+    BookDetailResponse includes id, external_id, external_source,
+    kitabee_rating, kitabee_ratings_count, metadata_json.
+    Route order: /search → /{book_id}/similar → /{book_id} (critical).
 
-- [ ] **T6.4** Add "similar books" endpoint
-  - Status: 🔴 BLOCKED
+- [x] **T6.4** Add "similar books" endpoint (`GET /api/v1/books/{book_id}/similar`)
+  - Status: ✅ DONE
+  - Completed: 2026-07-18
+  - Notes: limit param (1-40, default 10). Source book filtered from results.
+    Similarity query = first author + first genre. Falls back to title
+    when both absent. Reuses BookSearchResponse shape — no new schema.
+    DEFAULT_SIMILAR_LIMIT = 10 added to schemas/book.py constants.
 
-- [ ] **T6.5** Write tests
-  - Status: 🔴 BLOCKED
+- [x] **T6.5** Write tests
+  - Status: ✅ DONE
+  - Completed: 2026-07-18
+  - Notes: 27 tests in tests/test_books_detail_api.py, 11 classes.
+    Covers: happy path (5), not found/404 (3), 503 upstream (4),
+    limit validation (3), service wiring (2), envelope meta (3),
+    similar happy path (5), similar not found (2).
+    164 total tests passing. Same stub/override pattern as Day 5.
 
-- [ ] **T6.6** Commit + push + update tracker
-  - Status: 🔴 BLOCKED
-
----
+- [x] **T6.6** Commit + push + update tracker
+  - Status: ✅ DONE
+  - Completed: 2026-07-18
+  - Commit: f0240b5
+  - Notes: 5 files changed, 1199 insertions. 164 tests passing.
 
 ## 📋 DAY 7: Week 1 Review & Documentation
 

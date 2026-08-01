@@ -29,6 +29,54 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/books", tags=["books"])
 
 
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+def _raise_503(log_message: str, user_message: str, context: dict, exc: Exception) -> None:
+    """Log a TransientAPIError and raise a 503 HTTPException.
+
+    Args:
+        log_message: Message written to the error log.
+        user_message: Human-readable message returned to the caller.
+        context: Extra fields attached to the log record.
+        exc: The original exception, chained onto the HTTPException.
+
+    Raises:
+        HTTPException: Always raises 503 SERVICE_UNAVAILABLE.
+    """
+    logger.error(log_message, extra=context)
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": "UPSTREAM_UNAVAILABLE",
+            "message": user_message,
+        },
+    ) from exc
+
+
+def _raise_404(book_id: UUID) -> None:
+    """Raise a 404 HTTPException for an unknown book UUID.
+
+    Args:
+        book_id: The UUID that was not found.
+
+    Raises:
+        HTTPException: Always raises 404 NOT_FOUND.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={
+            "code": "BOOK_NOT_FOUND",
+            "message": f"No book found with id {book_id}.",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
 @router.get("/search")
 async def search_books(
     q: str = Query(
@@ -74,17 +122,12 @@ async def search_books(
             offset=offset,
         )
     except TransientAPIError as exc:
-        logger.error(
-            "Book search upstream failure",
-            extra={"query": q, "error": str(exc)},
+        _raise_503(
+            log_message="Book search upstream failure",
+            user_message="Book search is temporarily unavailable. Please try again.",
+            context={"query": q, "error": str(exc)},
+            exc=exc,
         )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "UPSTREAM_UNAVAILABLE",
-                "message": "Book search is temporarily unavailable. Please try again.",
-            },
-        ) from exc
 
     return JSONResponse(content=success_envelope(payload.model_dump(mode="json")))
 
@@ -123,26 +166,15 @@ async def get_similar_books(
             limit=limit,
         )
     except TransientAPIError as exc:
-        logger.error(
-            "Similar books upstream failure",
-            extra={"book_id": str(book_id), "error": str(exc)},
+        _raise_503(
+            log_message="Similar books upstream failure",
+            user_message="Similar books are temporarily unavailable. Please try again.",
+            context={"book_id": str(book_id), "error": str(exc)},
+            exc=exc,
         )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "UPSTREAM_UNAVAILABLE",
-                "message": "Similar books are temporarily unavailable. Please try again.",
-            },
-        ) from exc
 
     if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "BOOK_NOT_FOUND",
-                "message": f"No book found with id {book_id}.",
-            },
-        )
+        _raise_404(book_id)
 
     return JSONResponse(content=success_envelope(payload.model_dump(mode="json")))
 
@@ -171,25 +203,14 @@ async def get_book(
     try:
         payload: BookDetailResponse | None = await service.get_by_id(book_id)
     except TransientAPIError as exc:
-        logger.error(
-            "Book detail upstream failure",
-            extra={"book_id": str(book_id), "error": str(exc)},
+        _raise_503(
+            log_message="Book detail upstream failure",
+            user_message="Book details are temporarily unavailable. Please try again.",
+            context={"book_id": str(book_id), "error": str(exc)},
+            exc=exc,
         )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "UPSTREAM_UNAVAILABLE",
-                "message": "Book details are temporarily unavailable. Please try again.",
-            },
-        ) from exc
 
     if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "BOOK_NOT_FOUND",
-                "message": f"No book found with id {book_id}.",
-            },
-        )
+        _raise_404(book_id)
 
     return JSONResponse(content=success_envelope(payload.model_dump(mode="json")))

@@ -23,6 +23,31 @@ from src.database.base import Book
 
 GOOGLE_BOOKS_SOURCE = "google_books"
 
+# Fields updated on every upsert. Excludes identity fields (external_id,
+# external_source) and Kitabee-owned fields (kitabee_rating,
+# kitabee_ratings_count) which are never overwritten by upstream data.
+_MUTABLE_FIELDS = (
+    "title",
+    "subtitle",
+    "authors",
+    "description",
+    "genres",
+    "tags",
+    "isbn_10",
+    "isbn_13",
+    "published_year",
+    "publisher",
+    "page_count",
+    "language",
+    "cover_url",
+    "cover_url_large",
+    "average_rating",
+    "ratings_count",
+    "metadata_json",
+    "cached_at",
+    "updated_at",
+)
+
 
 def _extract_published_year(published_date: Any) -> Optional[int]:
     """Extract a year from a normalized YYYY-MM-DD date string."""
@@ -100,26 +125,13 @@ def _book_kwargs_from_google(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _apply_book_updates(book: Book, values: dict[str, Any]) -> None:
-    """Apply mutable fields onto an existing Book ORM object."""
-    book.title = values["title"]
-    book.subtitle = values["subtitle"]
-    book.authors = values["authors"]
-    book.description = values["description"]
-    book.genres = values["genres"]
-    book.tags = values["tags"]
-    book.isbn_10 = values["isbn_10"]
-    book.isbn_13 = values["isbn_13"]
-    book.published_year = values["published_year"]
-    book.publisher = values["publisher"]
-    book.page_count = values["page_count"]
-    book.language = values["language"]
-    book.cover_url = values["cover_url"]
-    book.cover_url_large = values["cover_url_large"]
-    book.average_rating = values["average_rating"]
-    book.ratings_count = values["ratings_count"]
-    book.metadata_json = values["metadata_json"]
-    book.cached_at = values["cached_at"]
-    book.updated_at = values["updated_at"]
+    """Apply mutable fields onto an existing Book ORM object.
+
+    Only fields listed in ``_MUTABLE_FIELDS`` are written. Identity
+    and Kitabee-owned fields are never touched.
+    """
+    for field in _MUTABLE_FIELDS:
+        setattr(book, field, values[field])
 
 
 async def get_book_by_id(
