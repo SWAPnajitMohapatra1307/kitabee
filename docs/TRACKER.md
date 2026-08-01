@@ -337,7 +337,7 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### 📊 Day Progress
 ```
-░░░░░░░░░░ 0% (0/7 tasks)
+██████████ 100% (7/7 tasks)
 ```
 
 ### 📚 Prerequisites
@@ -382,12 +382,16 @@ Build async client for Google Books API with retry logic and error handling.
   - Notes: Real API smoke test caught two bugs. (1) API key was leaking into TransientAPIError message via response.url — fixed by stripping query string in _handle_response. (2) Google returns 503 (not 404) for garbage volume IDs, causing get_by_id to raise after retries — fixed by catching TransientAPIError in get_by_id and returning None. Manual test script deleted after passing.
 
 - [x] **T3.7** Commit + push + update tracker
-  - Status: 🟡 IN_PROGRESS
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Commit: 9ad53a4 (batched with Days 1-4 in initial commit)
+  - Notes: Git was never initialized before this. Repo created + first commit performed at end of Day 4.
+  
 ## 💾 DAY 4: Redis Caching Layer
 
 ### 📊 Day Progress
 ```
-░░░░░░░░░░ 0% (0/7 tasks)
+██████████ 100% (7/7 tasks)
 ```
 
 ### Tasks
@@ -429,10 +433,11 @@ Build async client for Google Books API with retry logic and error handling.
   - Time Spent: ~30min
   - Notes: Created src/api/routes/health.py with GET /health and GET /health/cache. Standard response envelope (success/data/meta) per RULES §12. Added FastAPI lifespan context manager for Redis connect/disconnect. Redis failure at startup is logged but non-fatal — cache degrades gracefully. Verified both endpoints live via curl.
 
-- [ ] **T4.7** Commit + push + update tracker
-  - Status: 🔴 BLOCKED
-  - Estimated: 15min
-
+- [x] **T4.7** Commit + push + update tracker
+  - Status: ✅ DONE
+  - Completed: 2026-07-17
+  - Commit: 9ad53a4
+  - Notes: Batch commit — first push to GitHub ever. Covers Days 1-4. 49 files, 16,537 lines. Repo private until launch. .claude/ added to .gitignore before commit. No secrets pushed.
 ---
 
 ## 🔍 DAY 5: Book Search Endpoint
