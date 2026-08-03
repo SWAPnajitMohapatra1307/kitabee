@@ -3,7 +3,6 @@
 See ``docs/SCHEMA.md`` §4.1 for the canonical column definitions.
 """
 from __future__ import annotations
-
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -52,6 +51,9 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("TRUE")
+    )
+    is_superuser: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("FALSE")
     )
     email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("FALSE")

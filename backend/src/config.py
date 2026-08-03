@@ -14,9 +14,16 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     google_books_api_key: str
+
+    # JWT
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
-    jwt_expiration_minutes: int = 1440
+    jwt_access_token_expire_minutes: int = 1440   # 24 hours
+    jwt_refresh_token_expire_days: int = 30
+
+    # Admin
+    admin_secret_key: str = ""  # empty = disabled; set in .env to enable superuser
+
     environment: str = "development"
 
 
