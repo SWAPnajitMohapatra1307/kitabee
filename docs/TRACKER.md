@@ -70,13 +70,13 @@ When marking a task complete, use this format:
 
 ```
 Week 1: ██████████ 100% (7/7 days)
-Week 2: ██████░░░░ 60% (3/5 days)
+Week 2: ██████████ 100% (5/5 days)
 Week 3: ░░░░░░░░░░  0% (0/7 days)
 Week 4: ░░░░░░░░░░  0% (0/7 days)
 Week 5: ░░░░░░░░░░  0% (0/7 days)
 
 ...
-Total:  ███░░░░░░░ 37% (13/35 days)
+Total:  ████░░░░░░ 40% (14/35 days)
 
 
 
@@ -94,10 +94,10 @@ Total:  ███░░░░░░░ 37% (13/35 days)
 
 ### Current Sprint
 
-**Day:** Day 7 complete ✅
-**Focus:** Week 1 review, refactor, coverage, documentation
+**Day:** Day 14 complete ✅
+**Focus:** Week 2 integration testing, E2E flow, docs update
 **Blocker:** None
-**Next Milestone:** Day 8 — JWT Authentication
+**Next Milestone:** Day 15 — Content-Based Recommender (ML Week begins)
 
 ### Velocity
 
@@ -127,7 +127,7 @@ Total:  ███░░░░░░░ 37% (13/35 days)
 [✅] Day 11 - Ratings System
 [✅] Day 12 - Library Management
 [✅] Day 13 - User Preferences
-[ ] Day 14 - Week 2 Integration Testing
+[✅] Day 14 - Week 2 Integration Testing
 [ ] Day 15 - Content-Based Recommender (TF-IDF)
 [ ] Day 16 - Collaborative Filter (KNN)
 [ ] Day 17 - Neural Recommender (Keras)
@@ -608,7 +608,7 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### Week 2 Progress
 ```
-░░░░░░░░░░ 0% (0/40 tasks estimated)
+ ██████████ 100% (39/40 tasks estimated)
 ```
 
 ## 📅 DAY 8: JWT Authentication Setup
@@ -854,27 +854,41 @@ Build async client for Google Books API with retry logic and error handling.
   - Commit: 77e3b07
   - Notes: 11 tests in test_preferences_api.py. 333 total tests, zero regressions.
 
-  
+
 ## 📅 DAY 14: Week 2 Integration Testing
 
 ### Tasks
 
-- [ ] **T14.1** E2E scenario testing
-  - Status: 🔴 BLOCKED
+- [x] **T14.1** E2E scenario testing
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Notes: 18 E2E tests in test_e2e_user_flow.py. Full flow: register →
+    login → profile → update → rate → library → preferences → onboarding → delete.
 
-- [ ] **T14.2** Fix bugs found
-  - Status: 🔴 BLOCKED
+- [x] **T14.2** Fix bugs found
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Notes: Fixed wrong monkeypatch target in login test (update_user not
+    imported in auth.py). Fixed sync lambda stub where async required in
+    delete test (soft_delete_user is awaited by route).
 
-- [ ] **T14.3** Improve test coverage to 75%+
-  - Status: 🔴 BLOCKED
+- [x] **T14.3** Improve test coverage to 75%+
+  - Status: ⏭️ SKIPPED
+  - Notes: Already at 78% before T14.1. Target exceeded. Crud/service
+    layer coverage deferred to Week 3 when ML engine exercises them directly.
 
-- [ ] **T14.4** Update docs + LEARNING_NOTES
-  - Status: 🔴 BLOCKED
+- [x] **T14.4** Update docs + LEARNING_NOTES
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Notes: LEARNING_NOTES.md Week 2 section filled in. README updated to
+    351 tests, 78% coverage, Week 2 complete.
 
-- [ ] **T14.5** Weekly reflection
-  - Status: 🔴 BLOCKED
-
----
+- [x] **T14.5** Weekly reflection
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Commit: c66d4b0
+  - Notes: 351 tests passing, 78% coverage, all Week 2 endpoints live.
+    Week 3 starts Day 15 — ML recommendation engine.
 
 ## 🤖 WEEK 3: AI/ML Recommendation Engine
 
