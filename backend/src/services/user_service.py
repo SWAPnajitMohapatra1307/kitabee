@@ -7,6 +7,8 @@ Responsibilities:
 - Apply admin_key check to determine superuser status.
 - Authenticate users by email and password.
 - Update last_login_at on successful login.
+- Update profile fields.
+- Change password after verifying the current one.
 """
 
 from __future__ import annotations
@@ -23,17 +25,18 @@ from src.database.crud.user import (
     create_user,
     get_by_email,
     get_by_id,
+    soft_delete_user,
     update_user,
 )
 from src.database.base import User
-from src.schemas.user import UserCreate
+from src.schemas.user import UserCreate, UserProfileUpdate
 
 
 logger = logging.getLogger(__name__)
 
 
 class UserService:
-    """Business logic for user registration and authentication.
+    """Business logic for user registration, authentication, and profile management.
 
     Injected with an AsyncSession. Route handlers instantiate one
     per request.
@@ -66,7 +69,7 @@ class UserService:
             Newly created User ORM instance.
 
         Raises:
-            ValueError: If email is already registered.
+            ValueError: With message "EMAIL_TAKEN" if email already registered.
             ValueError: If password exceeds 72 bytes.
         """
         email = payload.email.strip().lower()
@@ -81,7 +84,6 @@ class UserService:
             raise ValueError("EMAIL_TAKEN")
 
         password_hash = hash_password(payload.password)
-
         is_superuser = self._check_admin_key(admin_key)
 
         logger.info(
@@ -111,7 +113,7 @@ class UserService:
     ) -> User | None:
         """Verify credentials and return the matching user.
 
-        Rejects missing, inactive, soft-deleted users.
+        Rejects missing, inactive, and soft-deleted users.
         Updates last_login_at on success.
 
         Args:
@@ -122,7 +124,6 @@ class UserService:
             Authenticated User ORM instance, or None on failure.
         """
         email = email.strip().lower()
-
         user = await get_by_email(self._db, email)
 
         if user is None:
@@ -147,10 +148,10 @@ class UserService:
             return None
 
         user = await update_user(
-        self._db,
-        user,
-        last_login_at=datetime.now(timezone.utc),
-         )
+            self._db,
+            user,
+            last_login_at=datetime.now(timezone.utc),
+        )
 
         logger.info(
             "Login successful",
@@ -172,9 +173,75 @@ class UserService:
         """
         return await get_by_id(self._db, user_id)
 
-    # ------------------------------------------------------------------
+    async def update_profile(
+        self,
+        user: User,
+        payload: UserProfileUpdate,
+    ) -> User:
+        """Apply profile field updates to an existing user.
+
+        Only fields explicitly set in the payload are written.
+        Omitted fields (None with no value provided) are skipped.
+
+        Args:
+            user: The authenticated User ORM instance to update.
+            payload: Validated profile update fields.
+
+        Returns:
+            Updated User ORM instance.
+        """
+        # Only send fields the caller actually provided, not None defaults.
+        updates = payload.model_dump(exclude_unset=True)
+
+        if not updates:
+            logger.info(
+                "Profile update skipped — no fields provided",
+                extra={"user_id": str(user.id)},
+            )
+            return user
+
+        logger.info(
+            "Updating user profile",
+            extra={"user_id": str(user.id), "fields": list(updates.keys())},
+        )
+
+        return await update_user(self._db, user, **updates)
+
+    async def change_password(
+        self,
+        user: User,
+        current_password: str,
+        new_password: str,
+    ) -> None:
+        """Change a user's password after verifying the current one.
+
+        Args:
+            user: The authenticated User ORM instance.
+            current_password: Plain text current password for verification.
+            new_password: Plain text new password to set.
+
+        Raises:
+            ValueError: With message "WRONG_PASSWORD" if current password
+                        does not match.
+            ValueError: If new password exceeds 72 bytes (bcrypt limit).
+        """
+        if not verify_password(current_password, user.password_hash):
+            logger.info(
+                "Password change failed — wrong current password",
+                extra={"user_id": str(user.id)},
+            )
+            raise ValueError("WRONG_PASSWORD")
+
+        new_hash = hash_password(new_password)
+
+        await update_user(self._db, user, password_hash=new_hash)
+
+        logger.info(
+            "Password changed successfully",
+            extra={"user_id": str(user.id)},
+        )
+
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _check_admin_key(self, admin_key: str | None) -> bool:
         """Determine superuser status from the provided admin_key.
