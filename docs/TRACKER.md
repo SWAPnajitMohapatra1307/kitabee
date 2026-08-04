@@ -70,12 +70,13 @@ When marking a task complete, use this format:
 
 ```
 Week 1: ██████████ 100% (7/7 days)
-Week 2: ████░░░░░░ 40% (2/5 days)
+Week 2: ██████░░░░ 60% (3/5 days)
 Week 3: ░░░░░░░░░░  0% (0/7 days)
 Week 4: ░░░░░░░░░░  0% (0/7 days)
 Week 5: ░░░░░░░░░░  0% (0/7 days)
 
-Total:  ███░░░░░░░ 31% (11/35 days)
+...
+Total:  ███░░░░░░░ 37% (13/35 days)
 
 
 
@@ -125,7 +126,7 @@ Total:  ███░░░░░░░ 31% (11/35 days)
 [✅] Day 10 - User Profile + Password Security
 [✅] Day 11 - Ratings System
 [✅] Day 12 - Library Management
-[ ] Day 13 - User Preferences
+[✅] Day 13 - User Preferences
 [ ] Day 14 - Week 2 Integration Testing
 [ ] Day 15 - Content-Based Recommender (TF-IDF)
 [ ] Day 16 - Collaborative Filter (KNN)
@@ -825,18 +826,35 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### Tasks
 
-- [ ] **T13.1** Create preferences schemas
-  - Status: 🔴 BLOCKED
+- [x] **T13.1** Create preferences schemas
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Notes: schemas/preferences.py — PreferencesUpdate (PUT full-replace semantics,
+    all fields have defaults), PreferencesResponse, NotificationSettings,
+    PrivacySettings.
 
-- [ ] **T13.2** Create preferences service
-  - Status: 🔴 BLOCKED
+- [x] **T13.2** Create preferences CRUD + service
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Notes: database/crud/preferences.py — get_preferences, create_preferences,
+    update_preferences. services/preferences_service.py — get_my_preferences
+    (404 if missing), upsert_my_preferences (upsert pattern), complete_onboarding
+    (sets onboarding_completed on User, idempotent).
 
-- [ ] **T13.3** Create routes (GET, PUT, complete-onboarding)
-  - Status: 🔴 BLOCKED
+- [x] **T13.3** Create routes (GET, PUT, complete-onboarding)
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Notes: api/routes/preferences.py — GET /api/v1/users/me/preferences,
+    PUT /api/v1/users/me/preferences, POST /api/v1/users/me/preferences/complete.
+    All protected via get_current_user. main.py updated to register router.
 
-- [ ] **T13.4** Tests + commit
-  - Status: 🔴 BLOCKED
+- [x] **T13.4** Tests + commit
+  - Status: ✅ DONE
+  - Completed: 2026-08-05
+  - Commit: 77e3b07
+  - Notes: 11 tests in test_preferences_api.py. 333 total tests, zero regressions.
 
+  
 ## 📅 DAY 14: Week 2 Integration Testing
 
 ### Tasks
