@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from src.api.response import error_envelope
-from src.api.routes import auth, books, health,users
+from src.api.routes import auth, books, health, ratings, users
 from src.cache.redis_client import redis_client
 from src.external.google_books import GoogleBooksClient
 
@@ -123,3 +123,4 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(books.router)
 app.include_router(users.router)
+app.include_router(ratings.router)
