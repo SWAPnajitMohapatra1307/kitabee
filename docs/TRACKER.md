@@ -70,13 +70,14 @@ When marking a task complete, use this format:
 
 ```
 Week 1: ██████████ 100% (7/7 days)
-Week 2: ░░░░░░░░░░  0% (0/7 days)
+Week 2: ████░░░░░░ 40% (2/5 days)
 Week 3: ░░░░░░░░░░  0% (0/7 days)
 Week 4: ░░░░░░░░░░  0% (0/7 days)
 Week 5: ░░░░░░░░░░  0% (0/7 days)
 
-Total:  ███░░░░░░░ 29% (10/35 days)
-```
+Total:  ███░░░░░░░ 31% (11/35 days)
+
+
 
 ### Task Completion Stats
 
@@ -122,7 +123,7 @@ Total:  ███░░░░░░░ 29% (10/35 days)
 [✅] Day 8  - JWT Authentication Setup
 [✅] Day 9  - User Registration + Login
 [✅] Day 10 - User Profile + Password Security
-[ ] Day 11 - Ratings System
+[✅] Day 11 - Ratings System
 [ ] Day 12 - Library Management
 [ ] Day 13 - User Preferences
 [ ] Day 14 - Week 2 Integration Testing
@@ -754,20 +755,42 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### Tasks
 
-- [ ] **T11.1** Create rating schemas
-  - Status: 🔴 BLOCKED
+- [x] **T11.1** Create rating schemas
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: schemas/rating.py — RatingCreate (rating 1-5, review_title,
+    review_text, is_spoiler), RatingResponse, MyRatingsResponse (paginated).
 
-- [ ] **T11.2** Create rating service
-  - Status: 🔴 BLOCKED
+- [x] **T11.2** Create rating CRUD
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: database/crud/rating.py — get_rating, get_ratings_by_user,
+    upsert_rating (SELECT then INSERT/UPDATE, ORM session stays consistent),
+    delete_rating (returns bool), recalculate_book_stats (single aggregate
+    query updates kitabee_rating + kitabee_ratings_count on books table).
 
-- [ ] **T11.3** Create rating routes (POST, GET, DELETE)
-  - Status: 🔴 BLOCKED
+- [x] **T11.3** Create rating service
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: services/rating_service.py — rate_book (upsert + recalculate +
+    commit), get_my_rating, delete_my_rating (recalculates on delete),
+    get_my_ratings (paginated).
 
-- [ ] **T11.4** Add trigger for book stats update
-  - Status: 🔴 BLOCKED
+- [x] **T11.4** Create rating routes
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: api/routes/ratings.py — POST /api/v1/books/{book_id}/ratings,
+    GET /api/v1/books/{book_id}/ratings/me, DELETE /api/v1/books/{book_id}/ratings/me,
+    GET /api/v1/users/me/ratings. All protected via get_current_user.
+    main.py updated to register ratings router.
 
-- [ ] **T11.5** Tests + commit
-  - Status: 🔴 BLOCKED
+- [x] **T11.5** Tests + commit
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Commit: b5898ef
+  - Notes: 27 tests in test_ratings_api.py. Same patterns as previous days —
+    dependency_overrides for auth, monkeypatch for RatingService, SimpleNamespace
+    fake objects. 294 total tests, zero regressions.
 
 ## 📅 DAY 12: Library Management
 
