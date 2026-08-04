@@ -75,7 +75,7 @@ Week 3: ░░░░░░░░░░  0% (0/7 days)
 Week 4: ░░░░░░░░░░  0% (0/7 days)
 Week 5: ░░░░░░░░░░  0% (0/7 days)
 
-Total:  ███░░░░░░░ 26% (9/35 days)
+Total:  ███░░░░░░░ 29% (10/35 days)
 ```
 
 ### Task Completion Stats
@@ -121,7 +121,7 @@ Total:  ███░░░░░░░ 26% (9/35 days)
 [✅] Day 7  - Week 1 Review & Documentation
 [✅] Day 8  - JWT Authentication Setup
 [✅] Day 9  - User Registration + Login
-[ ] Day 10 - User Profile + Password Security
+[✅] Day 10 - User Profile + Password Security
 [ ] Day 11 - Ratings System
 [ ] Day 12 - Library Management
 [ ] Day 13 - User Preferences
@@ -718,20 +718,37 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### Tasks
 
-- [ ] **T10.1** Add user profile endpoints (me, update, delete)
-  - Status: 🔴 BLOCKED
+- [x] **T10.1** Add user profile endpoints (me, update, delete)
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: GET /api/v1/users/me, PATCH /api/v1/users/me,
+    DELETE /api/v1/users/me. get_current_user dependency wired.
+    Soft delete via existing soft_delete_user CRUD.
 
-- [ ] **T10.2** Enhance password validation
-  - Status: 🔴 BLOCKED
+- [x] **T10.2** Add password change endpoint
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: PATCH /api/v1/users/me/password. Verifies current password
+    before hashing and persisting new one. WRONG_PASSWORD → 400.
+    Bcrypt 72-byte limit → 400 INVALID_PASSWORD.
 
-- [ ] **T10.3** Add rate limiting (slowapi)
-  - Status: 🔴 BLOCKED
+- [x] **T10.3** Add new schemas
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: UserProfileUpdate (all fields optional, exclude_unset pattern).
+    PasswordChangeRequest (current_password, new_password).
 
-- [ ] **T10.4** Write tests
-  - Status: 🔴 BLOCKED
+- [x] **T10.4** Write tests
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: 30 tests in test_users_api.py. dependency_overrides for
+    get_current_user. monkeypatch for UserService. SimpleNamespace
+    fake user. 267 total tests, zero regressions.
 
-- [ ] **T10.5** Commit + push + update tracker
-  - Status: 🔴 BLOCKED
+- [x] **T10.5** Commit + push + update tracker
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Commit: d07eb83
 
 ## 📅 DAY 11: Ratings System
 
