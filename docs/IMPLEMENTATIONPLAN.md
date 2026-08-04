@@ -605,6 +605,10 @@ By end of Week 2, users can register, login, rate books, and manage their librar
 - [ ] **T9.1** Create user schemas (`schemas/user.py`) (1h)
   - Follow SCHEMA.md section 8
   - UserCreate, UserLogin, UserResponse, TokenResponse
+  - Add optional `admin_key` field to UserCreate (not documented publicly)
+  - Add `ADMIN_SECRET_KEY` to `config.py` and `.env.example`
+  - `create_user` in user_service checks admin_key silently:
+    if match → is_superuser = TRUE, if missing/wrong → is_superuser = FALSE
 
 - [ ] **T9.2** Create user service (`services/user_service.py`) (1.5h)
   - `create_user(user_data)`

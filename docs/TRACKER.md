@@ -75,7 +75,7 @@ Week 3: ░░░░░░░░░░  0% (0/7 days)
 Week 4: ░░░░░░░░░░  0% (0/7 days)
 Week 5: ░░░░░░░░░░  0% (0/7 days)
 
-Total:  ██░░░░░░░░ 20% (7/35 days)
+Total:  ███░░░░░░░ 26% (9/35 days)
 ```
 
 ### Task Completion Stats
@@ -119,8 +119,8 @@ Total:  ██░░░░░░░░ 20% (7/35 days)
 [✅] Day 5  - Book Search Endpoint
 [✅] Day 6  - Book Details Endpoint
 [✅] Day 7  - Week 1 Review & Documentation
-[ ] Day 8  - JWT Authentication Setup
-[ ] Day 9  - User Registration + Login
+[✅] Day 8  - JWT Authentication Setup
+[✅] Day 9  - User Registration + Login
 [ ] Day 10 - User Profile + Password Security
 [ ] Day 11 - Ratings System
 [ ] Day 12 - Library Management
@@ -596,10 +596,10 @@ Build async client for Google Books API with retry logic and error handling.
     docs/API_EXAMPLES.md created with curl commands and full
     response examples for all 5 endpoints.
 
-- [ ] **T7.5** Review LEARNING_NOTES.md
+- [x] **T7.5** Review LEARNING_NOTES.md
   - Status: 🟢 READY
 
-- [ ] **T7.6** Reflect + plan Week 2
+- [x] **T7.6** Reflect + plan Week 2
   - Status: 🟢 READY
 
 ## 🔐 WEEK 2: Auth & User System
@@ -611,52 +611,108 @@ Build async client for Google Books API with retry logic and error handling.
 
 ## 📅 DAY 8: JWT Authentication Setup
 
+### 📊 Day Progress
+```
+██████████ 100% (7/7 tasks)
+```
+
 ### Tasks
 
-- [ ] **T8.1** Study JWT concepts
-  - Status: 🔴 BLOCKED
-  - Depends On: Day 7 complete
+- [x] **T8.1** Study JWT concepts + update config.py
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: Added jwt_access_token_expire_minutes, jwt_refresh_token_expire_days,
+    admin_secret_key to config.py. Added is_superuser column to User model +
+    Alembic migration applied (6c1dab16ff3b).
 
-- [ ] **T8.2** Install auth dependencies
-  - Status: 🔴 BLOCKED
-  - Command: `pip install python-jose[cryptography] passlib[bcrypt]`
+- [x] **T8.2** Install auth dependencies
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: python-jose[cryptography]==3.3.0, passlib[bcrypt]==1.7.4,
+    bcrypt==4.0.1 (pinned to fix passlib compatibility), slowapi==0.1.9
 
-- [ ] **T8.3** Create `backend/src/auth/password.py`
-  - Status: 🔴 BLOCKED
+- [x] **T8.3** Create `backend/src/auth/password.py`
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: hash_password + verify_password. 72-byte bcrypt limit enforced.
+    verify returns False (not raises) on oversized input.
 
-- [ ] **T8.4** Create `backend/src/auth/jwt_handler.py`
-  - Status: 🔴 BLOCKED
+- [x] **T8.4** Create `backend/src/auth/jwt_handler.py`
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: create_access_token, create_refresh_token, verify_token.
+    Token type claim prevents access/refresh token substitution.
 
-- [ ] **T8.5** Create `backend/src/auth/dependencies.py`
-  - Status: 🔴 BLOCKED
+- [x] **T8.5** Create `backend/src/auth/dependencies.py`
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: get_current_user + get_current_superuser stubs created.
+    DB lookup wired in Day 9 when crud/user.py is available.
 
-- [ ] **T8.6** Write auth tests
-  - Status: 🔴 BLOCKED
+- [x] **T8.6** Write auth tests
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: 25 tests — test_auth_password.py (10) + test_auth_jwt.py (15).
+    All passing. 207 total tests, zero regressions.
 
-- [ ] **T8.7** Commit + push + update tracker
-  - Status: 🔴 BLOCKED
+- [x] **T8.7** Commit + push + update tracker
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Commit: d814312
 
 ## 📅 DAY 9: User Registration + Login
 
 ### Tasks
 
-- [ ] **T9.1** Create user schemas
-  - Status: 🔴 BLOCKED
+- [x] **T9.1** Create user schemas
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: schemas/user.py — UserCreate, UserLogin, RefreshTokenRequest,
+    UserResponse, TokenResponse. admin_key intentionally excluded from
+    public schema.
 
-- [ ] **T9.2** Create user service
-  - Status: 🔴 BLOCKED
+- [x] **T9.2** Create user CRUD + service
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: database/crud/user.py — get_by_id, get_by_email, create_user,
+    update_user, soft_delete_user. services/user_service.py — create_user
+    with admin_key silent check, authenticate_user, get_by_id.
 
-- [ ] **T9.3** Create auth routes
-  - Status: 🔴 BLOCKED
+- [x] **T9.3** Create auth routes
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: api/routes/auth.py — POST /api/v1/auth/register,
+    POST /api/v1/auth/login, POST /api/v1/auth/refresh.
+    auth/dependencies.py wired with real DB lookup and superuser check.
 
-- [ ] **T9.4** Test via Swagger
-  - Status: 🔴 BLOCKED
+- [x] **T9.4** Test via Swagger + manual smoke test
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: All flows verified via curl.exe and Invoke-RestMethod.
+    Normal register, duplicate email 409, superuser register,
+    login, refresh, wrong password 401, token type mismatch 401,
+    wrong admin_key silent fail — all confirmed working.
 
-- [ ] **T9.5** Write integration tests
-  - Status: 🔴 BLOCKED
+- [x] **T9.5** Wire auth dependencies
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: get_current_user DB lookup wired. get_current_superuser
+    is_superuser check wired.
 
-- [ ] **T9.6** Commit + push + update tracker
-  - Status: 🔴 BLOCKED
+- [x] **T9.6** Manual smoke test
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+
+- [x] **T9.7** Write integration tests
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
+  - Notes: 30 tests in test_auth_api.py. StubUserService via monkeypatch.
+    SimpleNamespace fake user to avoid SQLAlchemy ORM machinery.
+    237 total tests, zero regressions.
+
+- [x] **T9.8** Commit + push + update tracker
+  - Status: ✅ DONE
+  - Completed: 2026-08-03
 
 ## 📅 DAY 10: User Profile + Password Security
 
@@ -1182,19 +1238,19 @@ Build async client for Google Books API with retry logic and error handling.
 
 ### Milestone Checklist
 
-- [ ] 🎯 **M1: Environment Ready** (Day 1)
+- [x] 🎯 **M1: Environment Ready** (Day 1)
   - Completed: [Date]
   - All docs created, tools installed
 
-- [ ] 🗄️ **M2: Database Live** (Day 2)
+- [x] 🗄️ **M2: Database Live** (Day 2)
   - Completed: [Date]
   - 7 tables created, migrations working
 
-- [ ] 📚 **M3: Book Search Working** (Day 5)
+- [x] 📚 **M3: Book Search Working** (Day 5)
   - Completed: [Date]
   - Can search books via API
 
-- [ ] 🔐 **M4: Auth System Live** (Day 9)
+- [x] 🔐 **M4: Auth System Live** (Day 9)
   - Completed: [Date]
   - Users can register + login
 

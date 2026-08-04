@@ -239,6 +239,7 @@ CREATE TABLE users (
     date_of_birth DATE,
     onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -276,6 +277,7 @@ CREATE INDEX idx_users_last_login ON users(last_login_at);
 | `date_of_birth` | DATE | ✅ | NULL | For age-appropriate recs |
 | `onboarding_completed` | BOOLEAN | ❌ | FALSE | Completed initial setup? |
 | `is_active` | BOOLEAN | ❌ | TRUE | Account status |
+| `is_superuser` | BOOLEAN | ❌ | FALSE | Grants admin privileges (set via DB only) |
 | `email_verified` | BOOLEAN | ❌ | FALSE | Email verification status |
 | `last_login_at` | TIMESTAMP | ✅ | NULL | Last successful login |
 | `created_at` | TIMESTAMP | ❌ | NOW() | Account creation time |
