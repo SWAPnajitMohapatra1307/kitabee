@@ -154,12 +154,106 @@ Raw and honest — what worked, what didn't, what to remember.
 
 ---
 
-## Week 2 — Auth & User System (Days 8–14)
+## Week 2 — Auth & User System (Days 8—14)
 
-*To be filled in after Week 2.*
+### Authentication
+
+**bcrypt must be pinned to 4.0.1**
+- Newer bcrypt versions break passlib integration silently
+- Always pin: `bcrypt==4.0.1` in requirements.txt
+- Lesson: third-party auth libraries have fragile transitive dependencies;
+  pin everything that touches passwords
+
+**72-byte bcrypt hard limit**
+- bcrypt silently truncates passwords longer than 72 bytes
+- Two different passwords that share the same first 72 bytes will match
+- Fix: enforce the limit explicitly in both hash_password and verify_password
+- Lesson: never trust a library to enforce its own constraints; check at
+  the boundary you control
+
+**Token type claim is required**
+- Access and refresh tokens must carry a "type" claim ("access" or "refresh")
+- Without it, a refresh token could be used where an access token is expected
+- Lesson: JWTs are only as safe as the claims you verify
+
+**FastAPI OAuth2PasswordBearer returns 403, not 401**
+- When no credentials are sent, FastAPI returns 403 FORBIDDEN
+- Tests that assert 401 on missing auth will fail
+- Lesson: test the actual framework behaviour, not the RFC behaviour
 
 ---
 
+### Testing
+
+**monkeypatch target must be where the name is used, not where it is defined**
+- `soft_delete_user` is defined in `crud/user.py` but imported into
+  `routes/users.py`
+- Patching `crud.user.soft_delete_user` has no effect on the route
+- Patch `src.api.routes.users.soft_delete_user` instead
+- Lesson: always patch the import reference, not the definition
+
+**Async stubs must be async**
+- If a route does `await some_function(...)`, the monkeypatched replacement
+  must also be an async function
+- A plain lambda or sync function causes `TypeError: object can't be used
+  in 'await' expression`
+- Lesson: match the async signature of whatever you are replacing
+
+**dependency_overrides is the cleanest auth bypass**
+- `app.dependency_overrides[get_current_user] = lambda: fake_user`
+- Cleaner than patching JWT internals
+- Always clear overrides after each test via autouse fixture
+- Lesson: override at the dependency boundary, not inside the handler
+
+**SimpleNamespace for fake ORM objects**
+- SQLAlchemy model instances have descriptor machinery that crashes when
+  accessed outside a session
+- SimpleNamespace gives plain attribute access with no descriptor overhead
+- Always use `defaults.update(kwargs)` then `SimpleNamespace(**defaults)`
+- Never pass **kwargs directly alongside hardcoded fields — causes duplicate
+  keyword argument crash
+
+---
+
+### API Design
+
+**PUT = full replace, PATCH = partial update**
+- Preferences uses PUT: all fields have defaults, omitted fields reset to defaults
+- Profile uses PATCH: only sent fields are updated, omitted fields unchanged
+- Lesson: choose the verb based on semantics, not convenience
+
+**Soft delete vs hard delete**
+- Users are soft-deleted: `deleted_at` timestamp set, row kept
+- Ratings and library items are hard-deleted: row removed
+- Lesson: decide per entity based on audit and recovery requirements
+
+**Upsert via lookup + IntegrityError fallback**
+- Pattern: SELECT → update if found → INSERT → catch IntegrityError →
+  SELECT again → update
+- Handles race conditions without raw SQL ON CONFLICT
+- Lesson: async SQLAlchemy makes ON CONFLICT awkward; this pattern is the
+  pragmatic alternative
+
+**onboarding_completed lives on User, not UserPreferences**
+- Onboarding state is a user account concern, not a preferences concern
+- complete_onboarding is idempotent: if already True, return user unchanged
+- Lesson: put state on the entity that owns the lifecycle
+
+---
+
+### Integration Testing
+
+**E2E tests should cover the full happy path in one file**
+- Register → login → profile → rate → library → preferences → onboarding → delete
+- Catches contract mismatches between route, service, and schema layers
+- Lesson: unit tests catch isolated bugs; E2E tests catch integration gaps
+
+**78% coverage at end of Week 2 with 351 tests**
+- Route and schema layers: 95-100% covered
+- Crud and service layers: 25-52% covered (stubbed out in most tests)
+- Lesson: high route coverage does not mean high business logic coverage;
+  crud/service layers need dedicated unit tests in a future pass
+  
 ## Week 3 — ML Recommendation Engine (Days 15–21)
 
 *To be filled in after Week 3.*

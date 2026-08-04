@@ -8,7 +8,7 @@ Built with React Native + Expo (mobile), FastAPI (backend), PostgreSQL, Redis, a
 
 ## Status
 
-**Week 1 complete — backend foundation live.**
+**Week 2 complete — auth, user system, and full backend API live.**
 
 | Day | What shipped |
 |-----|-------------|
@@ -19,8 +19,15 @@ Built with React Native + Expo (mobile), FastAPI (backend), PostgreSQL, Redis, a
 | 5 | Book search endpoint — validation, envelope, 503 handling, 25 tests |
 | 6 | Book detail + similar endpoints — DB persistence, UUID lookup, 27 tests |
 | 7 | Refactor, coverage to 82%, README |
+| 8 | JWT authentication — access + refresh tokens, 207 tests |
+| 9 | User registration + login endpoints, 237 tests |
+| 10 | User profile + password change + soft delete, 267 tests |
+| 11 | Ratings system — upsert, delete, book stats recalc, 294 tests |
+| 12 | Library management — add, list, update, remove, 322 tests |
+| 13 | User preferences — genres, theme, notifications, onboarding, 333 tests |
+| 14 | Week 2 integration testing — E2E flow, bug fixes, 351 tests |
 
-**182 tests passing. 82% coverage.**
+Current: 351 tests, 78% coverage.
 
 ---
 
@@ -315,7 +322,7 @@ kitabee/
         tests/                   # 182 tests
         alembic/                 # Migrations
 Roadmap
-Week 2 — Auth (JWT), user profiles, library management
+Week 2 — Auth (JWT), user profiles, library management ✅
 Week 3 — ML recommendation engine, ratings
 Week 4 — React Native mobile app
 Week 5 — Polish, deployment, launch
