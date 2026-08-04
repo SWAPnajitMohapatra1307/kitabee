@@ -124,7 +124,7 @@ Total:  ███░░░░░░░ 31% (11/35 days)
 [✅] Day 9  - User Registration + Login
 [✅] Day 10 - User Profile + Password Security
 [✅] Day 11 - Ratings System
-[ ] Day 12 - Library Management
+[✅] Day 12 - Library Management
 [ ] Day 13 - User Preferences
 [ ] Day 14 - Week 2 Integration Testing
 [ ] Day 15 - Content-Based Recommender (TF-IDF)
@@ -794,19 +794,32 @@ Build async client for Google Books API with retry logic and error handling.
 
 ## 📅 DAY 12: Library Management
 
-### Tasks
+- [x] **T12.1** Create library schemas
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: LibraryItemAdd, LibraryItemUpdate, LibraryItemResponse,
+    MyLibraryResponse. LibraryStatus imported from model.
 
-- [ ] **T12.1** Create library schemas
-  - Status: 🔴 BLOCKED
+- [x] **T12.2** Create library CRUD + service
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: crud/library.py — get_library_item, get_library_items_by_user,
+    create_library_item, update_library_item, delete_library_item.
+    services/library_service.py — add_book (409 on duplicate),
+    get_my_library, update_entry (404 on missing), remove_book.
 
-- [ ] **T12.2** Create library service
-  - Status: 🔴 BLOCKED
+- [x] **T12.3** Create library routes
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Notes: POST /api/v1/library (201), GET /api/v1/library (paginated +
+    status filter), PATCH /api/v1/library/{book_id},
+    DELETE /api/v1/library/{book_id}. main.py updated.
 
-- [ ] **T12.3** Create library routes (CRUD)
-  - Status: 🔴 BLOCKED
-
-- [ ] **T12.4** Tests + commit
-  - Status: 🔴 BLOCKED
+- [x] **T12.4** Tests + commit
+  - Status: ✅ DONE
+  - Completed: 2026-08-04
+  - Commit: 4ca80b2
+  - Notes: 28 tests in test_library_api.py. 322 total tests, zero regressions.
 
 ## 📅 DAY 13: User Preferences
 
@@ -1294,8 +1307,8 @@ Build async client for Google Books API with retry logic and error handling.
   - Completed: [Date]
   - Users can register + login
 
-- [ ] ⭐ **M5: Ratings + Library Working** (Day 12)
-  - Completed: [Date]
+- [x] ⭐ **M5: Ratings + Library Working** (Day 12)
+  - Completed: 2026-08-04
   - Users can rate + save books
 
 - [ ] 🤖 **M6: AI Recommendations Live** (Day 20)
