@@ -1,10 +1,12 @@
+---
+
 # 🔄 Kitabee — Application Flow Document
 
-> **Document Version:** 1.0  
-> **Last Updated:** [Today's Date]  
-> **Author:** [Your Name]  
-> **Status:** 🟢 Approved for Implementation  
-> **Related Docs:** [PRD.md](./PRD.md) | [TECHSPEC.md](./TECHSPEC.md)
+> **Document Version:** 2.0
+> **Last Updated:** [Today's Date]
+> **Author:** [Your Name]
+> **Status:** 🟢 Approved for Implementation
+> **Related Docs:** [PRD.md](./PRD.md) | [TECHSPEC.md](./TECHSPEC.md) | [SCHEMA.md](./SCHEMA.md)
 
 ---
 
@@ -16,51 +18,56 @@
 4. [Screen Inventory](#-screen-inventory)
 5. [Flow 1: First-Time User Onboarding](#-flow-1-first-time-user-onboarding)
 6. [Flow 2: Returning User Login](#-flow-2-returning-user-login)
-7. [Flow 3: Book Discovery](#-flow-3-book-discovery)
-8. [Flow 4: Book Search](#-flow-4-book-search)
-9. [Flow 5: Rating a Book](#-flow-5-rating-a-book)
-10. [Flow 6: Personal Library Management](#-flow-6-personal-library-management)
-11. [Flow 7: Reading Insights](#-flow-7-reading-insights)
-12. [Flow 8: Profile & Settings](#-flow-8-profile--settings)
-13. [Screen States](#-screen-states)
-14. [Error Handling Flows](#-error-handling-flows)
-15. [Empty States](#-empty-states)
-16. [Loading States](#-loading-states)
-17. [Success States](#-success-states)
-18. [Cross-Platform Considerations](#-cross-platform-considerations)
-19. [Accessibility Flows](#-accessibility-flows)
-20. [Analytics Events](#-analytics-events)
+7. [Flow 3: Netflix-Style Discovery (Home)](#-flow-3-netflix-style-discovery-home) 🆕
+8. [Flow 4: Search (Books + Comics)](#-flow-4-search-books--comics) 🔄
+9. [Flow 5: Detail Page + Series Order](#-flow-5-detail-page--series-order) 🔄
+10. [Flow 6: Rating Content](#-flow-6-rating-content)
+11. [Flow 7: Personal Library](#-flow-7-personal-library) 🔄
+12. [Flow 8: Free Reading (EPUB + Comics)](#-flow-8-free-reading-epub--comics) 🆕
+13. [Flow 9: Reading Insights](#-flow-9-reading-insights)
+14. [Flow 10: Profile & Settings](#-flow-10-profile--settings)
+15. [Screen States](#-screen-states)
+16. [Error Handling Flows](#-error-handling-flows)
+17. [Empty States](#-empty-states)
+18. [Loading States](#-loading-states)
+19. [Success States](#-success-states)
+20. [Cross-Platform Considerations](#-cross-platform-considerations)
+21. [Accessibility Flows](#-accessibility-flows)
 
 ---
 
 ## 🎯 Overview
 
 ### Purpose
-This document maps every user journey through Kitabee — from first launch to power-user engagement. It defines screen states, transition triggers, and edge cases.
+This document maps every user journey through Kitabee — from first launch through Netflix-style discovery, series-guided reading, and free public domain content consumption.
+
+### What Changed in v2.0
+- **Home screen redesigned** as Netflix-style themed collection rows
+- **Onboarding updated** to capture books/comics/both preference
+- **Search unified** for books + comics with content-type tabs
+- **Detail screen updated** with series order guide section
+- **New reading flows** for EPUB books and image-based comics
+- **Library updated** to show both books and comics
+- **10 flows total** (was 8) — added Netflix Discovery + Free Reading
 
 ### Scope
-- ✅ All MVP user flows (auth, discovery, ratings, library, insights)
+- ✅ All MVP user flows (auth, discovery, ratings, library, insights, reading)
+- ✅ Netflix-style themed collection experience
+- ✅ Series reading order guide
+- ✅ Free reading (EPUB + Comics)
 - ✅ All screen states (loading, error, empty, success)
 - ✅ Cross-platform behavior (web vs mobile)
-- ✅ Accessibility considerations
-- ❌ Post-MVP features (social, sharing, notifications)
-
-### How to Read This Doc
-
-- **Flows** — Complete user journeys with entry/exit points
-- **Screens** — Individual UI destinations
-- **States** — Different conditions of the same screen
-- **Transitions** — What triggers moving between screens
-- **Actions** — What the user does (tap, type, swipe)
-- **Feedback** — What the app shows in response
 
 ### Legend
 
 - 🏠 = Home/Root screens
 - 🔐 = Authentication screens
 - 📚 = Book-related screens
+- 🦸 = Comic-related screens 🆕
+- 🎬 = Collection screens 🆕
+- 🔢 = Series order screens 🆕
+- 📖 = Reading screens 🆕
 - ⭐ = Rating screens
-- 📖 = Library screens
 - 📊 = Insights screens
 - 👤 = Profile screens
 - ⚠️ = Error/Edge states
@@ -72,7 +79,7 @@ This document maps every user journey through Kitabee — from first launch to p
 
 ## 🗺️ App Structure Map
 
-### High-Level Architecture
+### High-Level Architecture (Updated v2.0)
 
 ```
 KITABEE APP
@@ -81,29 +88,31 @@ KITABEE APP
 │   ├── Splash Screen
 │   ├── Welcome Screen
 │   ├── Login Screen
-│   ├── Register Screen
-│   └── Password Reset Screen (Post-MVP)
+│   └── Register Screen
 │
 ├── 🚀 Onboarding Stack (first-time users)
 │   ├── Onboarding Intro
+│   ├── Content Choice (Books / Comics / Both) 🆕
+│   ├── Rate Initial Content
 │   ├── Genre Selection
-│   ├── Rate Initial Books
 │   └── Personalization Loading
 │
-└── 🏠 Main App (authenticated users)
-    │
-    ├── Bottom Tab Navigator
-    │   ├── 📚 Home Tab
-    │   ├── 🔍 Search Tab
-    │   ├── 📖 Library Tab
-    │   ├── 📊 Insights Tab
-    │   └── 👤 Profile Tab
-    │
-    └── Modal Stack (overlays)
-        ├── Book Details Modal
-        ├── Rating Modal
-        ├── Filter Modal
-        └── Confirmation Dialogs
+├── 🏠 Main App (authenticated users)
+│   │
+│   ├── Bottom Tab Navigator
+│   │   ├── 🏠 Home Tab (Netflix rows)
+│   │   ├── 🔍 Search Tab (Books + Comics)
+│   │   ├── 📖 Library Tab (Books + Comics)
+│   │   ├── 📊 Insights Tab
+│   │   └── 👤 Profile Tab
+│   │
+│   ├── Detail Stack (books + comics)
+│   │   ├── Detail Screen
+│   │   └── Full Collection Screen 🆕
+│   │
+│   └── Reader Stack 🆕
+│       ├── EPUB Reader Screen
+│       └── Comics Reader Screen
 ```
 
 ### Navigation Hierarchy
@@ -119,27 +128,32 @@ Root Navigator (Stack)
     │
     ├── Onboarding Navigator (Stack) ────► First login only
     │   ├── OnboardingIntro
+    │   ├── ContentChoice        🆕 books/comics/both
+    │   ├── RateInitialContent   🔄 books or comics based on choice
     │   ├── GenreSelection
-    │   ├── RateInitialBooks
     │   └── Personalizing
     │
-    └── Main Navigator (Tabs) ────► Authenticated + Onboarded
-        ├── Home Tab (Stack)
-        │   ├── HomeScreen
-        │   └── BookDetailsScreen
-        ├── Search Tab (Stack)
-        │   ├── SearchScreen
-        │   └── BookDetailsScreen
-        ├── Library Tab (Stack)
-        │   ├── LibraryScreen
-        │   └── BookDetailsScreen
-        ├── Insights Tab (Stack)
-        │   └── InsightsScreen
-        └── Profile Tab (Stack)
-            ├── ProfileScreen
-            ├── SettingsScreen
-            ├── EditProfileScreen
-            └── AboutScreen
+    ├── Main Navigator (Tabs) ────► Authenticated + Onboarded
+    │   ├── Home Tab (Stack)
+    │   │   ├── HomeScreen               🔄 Netflix rows
+    │   │   ├── FullCollectionScreen     🆕
+    │   │   └── DetailScreen             🔄 books or comics
+    │   ├── Search Tab (Stack)
+    │   │   ├── SearchScreen             🔄 books + comics tabs
+    │   │   └── DetailScreen
+    │   ├── Library Tab (Stack)
+    │   │   ├── LibraryScreen            🔄 books + comics
+    │   │   └── DetailScreen
+    │   ├── Insights Tab (Stack)
+    │   │   └── InsightsScreen
+    │   └── Profile Tab (Stack)
+    │       ├── ProfileScreen
+    │       ├── SettingsScreen
+    │       └── EditProfileScreen
+    │
+    └── Reader Modal Stack 🆕 ────► Free reading
+        ├── EPUBReaderScreen
+        └── ComicsReaderScreen
 ```
 
 ---
@@ -163,16 +177,15 @@ Root Navigator (Stack)
 **Behavior:**
 - Always visible in main app
 - Active tab highlighted with primary color (`#FFC93C`)
-- Icons use Material Icons via `@expo/vector-icons`
 - Tapping current tab scrolls to top OR goes to root of stack
-- Hidden during modal presentations
+- Hidden during modal presentations (reader screens)
 
 **Cross-Platform:**
+
 | Feature | Mobile | Web |
 |---------|--------|-----|
 | Tab bar position | Bottom | Bottom (or left sidebar > 1024px) |
 | Tap area | 44x44 min | 44x44 min |
-| Badge support | ✅ Yes | ✅ Yes |
 | Long-press menu | ✅ Yes | ❌ No |
 
 ### Header Navigation
@@ -184,53 +197,58 @@ Root Navigator (Stack)
 ```
 
 **Components:**
-- **Back button** (←) — Left side, shown when in stack (not root)
-- **Title** — Centered on iOS, left-aligned on Android/Web
-- **Actions** — Right side (search, menu, etc.)
+- Back button (←) — left side when in stack
+- Title — centered on iOS, left-aligned on Android/web
+- Actions — right side (search, menu, etc.)
 
 ---
 
-## 📱 Screen Inventory
+## 📱 Screen Inventory (Updated v2.0)
 
 ### Complete Screen List
 
-| # | Screen | Purpose | Access | Auth Required |
-|---|--------|---------|--------|---------------|
-| 1 | **SplashScreen** | Brand reveal, auth check | Auto on launch | ❌ |
-| 2 | **WelcomeScreen** | Marketing intro | Auto if not logged in | ❌ |
-| 3 | **LoginScreen** | Sign in | From Welcome | ❌ |
-| 4 | **RegisterScreen** | Create account | From Welcome | ❌ |
-| 5 | **OnboardingIntro** | Explain flow | Auto after register | ✅ |
-| 6 | **GenreSelection** | Pick favorite genres | Continue from intro | ✅ |
-| 7 | **RateInitialBooks** | Rate 5-10 books | Continue from genres | ✅ |
-| 8 | **PersonalizingScreen** | ML loading state | Auto after ratings | ✅ |
-| 9 | **HomeScreen** | Personalized recs | Main tab | ✅ |
-| 10 | **SearchScreen** | Book search | Main tab | ❌ |
-| 11 | **BookDetailsScreen** | Full book info | From any book tap | ❌ |
-| 12 | **RatingModal** | Rate a book | From book details | ✅ |
-| 13 | **LibraryScreen** | User's books | Main tab | ✅ |
-| 14 | **InsightsScreen** | Reading DNA | Main tab | ✅ |
-| 15 | **ProfileScreen** | User profile | Main tab | ✅ |
-| 16 | **SettingsScreen** | App settings | From Profile | ✅ |
-| 17 | **EditProfileScreen** | Edit info | From Profile | ✅ |
-| 18 | **AboutScreen** | App info | From Settings | ❌ |
+| # | Screen | Purpose | Access | Auth Required | Status |
+|---|--------|---------|--------|---------------|--------|
+| 1 | **SplashScreen** | Brand reveal, auth check | Auto on launch | ❌ | v1.0 |
+| 2 | **WelcomeScreen** | Marketing intro | Auto if not logged in | ❌ | v1.0 |
+| 3 | **LoginScreen** | Sign in | From Welcome | ❌ | v1.0 |
+| 4 | **RegisterScreen** | Create account | From Welcome | ❌ | v1.0 |
+| 5 | **OnboardingIntro** | Explain flow | Auto after register | ✅ | v1.0 |
+| 6 | **ContentChoiceScreen** 🆕 | Pick books/comics/both | From intro | ✅ | v2.0 |
+| 7 | **RateInitialContentScreen** 🔄 | Rate 5 items | From ContentChoice | ✅ | v2.0 |
+| 8 | **GenreSelectionScreen** | Pick favorite genres | From ratings | ✅ | v1.0 |
+| 9 | **PersonalizingScreen** | ML loading state | Auto after genres | ✅ | v1.0 |
+| 10 | **HomeScreen** 🔄 | Netflix-style collection rows | Main tab | ✅ | v2.0 |
+| 11 | **FullCollectionScreen** 🆕 | See all items in a collection | From CollectionRow | ✅ | v2.0 |
+| 12 | **SearchScreen** 🔄 | Books + Comics search | Main tab | ❌ | v2.0 |
+| 13 | **DetailScreen** 🔄 | Book or Comic full info | From any content tap | ❌ | v2.0 |
+| 14 | **RatingModal** | Rate a book/comic | From detail | ✅ | v1.0 |
+| 15 | **LibraryScreen** 🔄 | Books + Comics library | Main tab | ✅ | v2.0 |
+| 16 | **EPUBReaderScreen** 🆕 | Read free public domain books | From detail "Read Free" | ✅ | v2.0 |
+| 17 | **ComicsReaderScreen** 🆕 | Read free public domain comics | From detail "Read Free" | ✅ | v2.0 |
+| 18 | **InsightsScreen** | Reading DNA | Main tab | ✅ | v1.0 |
+| 19 | **ProfileScreen** | User profile | Main tab | ✅ | v1.0 |
+| 20 | **SettingsScreen** | App settings | From Profile | ✅ | v1.0 |
+| 21 | **EditProfileScreen** | Edit info | From Profile | ✅ | v1.0 |
+
+**Total: 21 screens (was 18 in v1.0)**
 
 ---
 
 ## 🚀 Flow 1: First-Time User Onboarding
 
 ### Purpose
-Convert a new visitor into an active user with personalized recommendations within 3 minutes.
+Convert a new visitor into an active user with personalized Netflix-style home screen within 3 minutes.
 
 ### Entry Points
 - App launched for first time (no auth token)
 - User taps "Get Started" on WelcomeScreen
 
 ### Exit Points
-- ✅ Success: Land on HomeScreen with personalized recommendations
+- ✅ Success: Land on HomeScreen with Netflix-style personalized collections
 - ⚠️ Failure: Back to Welcome (if abandoned)
 
-### Complete Flow Diagram
+### Complete Flow Diagram (Updated v2.0)
 
 ```
 ┌─────────────────┐
@@ -250,10 +268,10 @@ Convert a new visitor into an active user with personalized recommendations with
            │ No    │ Yes
            ▼       │
 ┌─────────────────┐│
-│ WelcomeScreen   ││  User sees:
-│ - Logo          ││  - Hero image
-│ - Value prop    ││  - "Get Started" CTA
-│ - "Get Started" ││  - "Already have account? Sign in"
+│ WelcomeScreen   ││
+│ - Logo          ││
+│ - Value prop    ││
+│ - "Get Started" ││
 │ - "Sign in"     ││
 └────────┬────────┘│
          │         │
@@ -264,31 +282,14 @@ Convert a new visitor into an active user with personalized recommendations with
       ▼     │      │
 ┌──────────┐│      │
 │ Register ││      │
-│ - Name   ││      │
-│ - Email  ││      │
-│ - Passwd ││      │
-│ [Submit] ││      │
 └────┬─────┘│      │
      │      │      │
      │      ▼      │
      │ ┌─────────┐ │
      │ │ Login   │ │
-     │ │ - Email │ │
-     │ │ - Passwd│ │
-     │ │[Submit] │ │
      │ └────┬────┘ │
      │      │      │
-     │      ▼      │
-     │  ┌─────────┐│
-     │  │Valid?   ││
-     │  └─┬─────┬─┘│
-     │    │ Yes │No│
-     │    │     │  │
-     │    │     ▼  │
-     │    │  [Error │
-     │    │   toast]│
-     │    │        │
-     │    └────────┼──────► Skip to HomeScreen
+     │      └──────┼──────► Skip to HomeScreen
      │             │
      ▼             │
 ┌─────────────────┐│
@@ -298,22 +299,50 @@ Convert a new visitor into an active user with personalized recommendations with
          │         │
          ▼         │
 ┌─────────────────┐│
-│OnboardingIntro  ││  User sees:
-│"Let's find your ││  - 3-slide carousel
-│  next read"     ││  - Skip button (top right)
-│                 ││  - "Get Started" CTA
+│OnboardingIntro  ││  3-slide carousel
+│"Let's find your ││  - Meet Kit 🐝
+│  next favorite" ││  - Netflix-style discovery
+│                 ││  - Free reading available
 └────────┬────────┘│
          │         │
          ▼         │
 ┌─────────────────┐│
-│Genre Selection  ││  User picks:
-│Pick 3+ genres:  ││  - At least 3 genres
-│                 ││  - Visual grid (12 options)
-│ 📚 Fiction      ││  - "Continue" enabled when 3+ selected
-│ 📖 Non-fiction  ││
-│ 🔬 Sci-Fi       ││
-│ 💔 Romance      ││
+│ContentChoice 🆕 ││  NEW v2.0
+│                 ││  User picks:
+│What do you love?││
+│                 ││
+│ 📚 Books        ││  Single-select tiles
+│ 🦸 Comics       ││  Large, tappable
+│ ✨ Both         ││
+│                 ││
+│ [Continue →]    ││
+└────────┬────────┘│
+         │         │
+         ▼         │
+┌─────────────────┐│
+│Rate Initial 🔄  ││  UPDATED v2.0
+│Content:         ││  Content shown depends on
+│                 ││  ContentChoice above
+│Rate 5 [items]:  ││
+│                 ││
+│ [Item1] ⭐⭐⭐⭐⭐ ││  Books if books chosen
+│ [Item2] ⭐⭐⭐   ││  Comics if comics chosen
+│ [Item3] Skip    ││  Mix if both chosen
+│                 ││
+│ Progress: 3/5   ││
+│ [Continue →]    ││
+└────────┬────────┘│
+         │         │
+         ▼         │
+┌─────────────────┐│
+│Genre Selection  ││
+│Pick 3+ genres:  ││
+│                 ││
+│ 📚 Fiction      ││
+│ 🚀 Sci-Fi       ││
 │ 🕵️ Mystery      ││
+│ 🦸 Superhero    ││  If comics enabled
+│ 💔 Romance      ││
 │ [12 total...]   ││
 │                 ││
 │ [Continue →]    ││
@@ -321,192 +350,68 @@ Convert a new visitor into an active user with personalized recommendations with
          │         │
          ▼         │
 ┌─────────────────┐│
-│RateInitialBooks ││  User sees:
-│Rate 5 books:    ││  - Grid of 15 popular books
-│                 ││  - From selected genres
-│ [Book1] ⭐⭐⭐⭐⭐ ││  - 5-star rating for each
-│ [Book2] ⭐⭐⭐   ││  - "Haven't read" skip option
-│ [Book3] ⭐⭐⭐⭐  ││  - Progress: "3/5 rated"
-│ [Book4] Skip    ││  - "Continue" enabled at 5 rated
-│ [Book5] ⭐⭐    ││
+│Personalizing 🔄 ││
 │                 ││
-│ Progress: 5/5   ││
-│ [Continue →]    ││
+│ 🐝              ││
+│ Building your   ││  Updated messaging
+│ personal        ││  for v2.0
+│ collections...  ││
+│ ████████░░ 80%  ││
 └────────┬────────┘│
          │         │
          ▼         │
 ┌─────────────────┐│
-│Personalizing 🔄 ││  User sees:
-│                 ││  - Animated bee mascot
-│ 🐝              ││  - "Kit is analyzing your taste..."
-│ Training your   ││  - Progress bar (fake but reassuring)
-│ personal AI...  ││  - Duration: 2-3s
-│ ████████░░ 80%  ││  - Backend: async ML processing
-└────────┬────────┘│
-         │         │
-         ▼         │
-┌─────────────────┐│
-│  HomeScreen ✅  │◄┘  User arrives at personalized home
-│                 │    - "Welcome, [Name]!"
-│ Your first recs │    - Top 10 recommendations ready
-│ are ready! 🎉   │    - Onboarding complete flag set
+│  HomeScreen ✅  │◄┘  Netflix-style home!
+│                 │
+│ Welcome, Priya! │  - 6+ themed collection rows
+│                 │  - "Because you loved X..."
+│ Your collections│  - "Free to Read Right Now"
+│ are ready! 🎉   │  - Comics rows if enabled
 └─────────────────┘
 ```
 
-### Screen-by-Screen Details
+### Screen-by-Screen Details (v2.0 Updates)
 
-#### SplashScreen (1-2 seconds)
-- **Purpose:** Brand impression + auth check
-- **Elements:** Kitabee logo (animated), tagline
-- **Actions:** None (auto-transitions)
-- **Backend:** Check for stored JWT token
-- **Success:** Route based on auth state
-- **Failure:** Route to Welcome (default)
-
-#### WelcomeScreen
-- **Purpose:** Convert visitor to signup
-- **Elements:**
-  - Kitabee logo (top)
-  - Hero image (reading illustration)
-  - Headline: "Discover your next great read"
-  - Subheadline: "AI-powered book recommendations"
-  - Primary CTA: "Get Started" (yellow button)
-  - Secondary link: "Already have an account? Sign in"
-- **Actions:**
-  - Tap "Get Started" → RegisterScreen
-  - Tap "Sign in" → LoginScreen
-
-#### RegisterScreen
-- **Purpose:** Create account
-- **Elements:**
-  - Back button
-  - Title: "Create Account"
-  - Form fields:
-    - Name (required, 2-50 chars)
-    - Email (required, valid format)
-    - Password (required, 8+ chars, 1 uppercase, 1 number)
-    - Password confirmation
-  - Submit button: "Sign Up"
-  - Legal: "By signing up, you agree to..."
-- **Validation:**
-  - Real-time field validation
-  - Show password strength indicator
-  - Disable submit until valid
-- **Actions:**
-  - Successful register → OnboardingIntro
-  - API error → Show error toast
-- **Backend:** POST `/api/v1/auth/register`
-
-#### OnboardingIntro (3-slide carousel)
-- **Slide 1:** "Meet Kit 🐝 — Your reading buddy"
-- **Slide 2:** "Rate books you love, get personalized picks"
-- **Slide 3:** "Discover your Reading DNA"
-- **Actions:**
-  - Swipe/tap through slides
-  - "Skip" (top right) → GenreSelection
-  - "Get Started" (last slide) → GenreSelection
-
-#### GenreSelection
-- **Purpose:** Solve cold-start problem (part 1)
+#### ContentChoiceScreen 🆕 (New in v2.0)
+- **Purpose:** Set user's content type preference before rating
 - **Elements:**
   - Header: "What do you love to read?"
-  - Subheader: "Pick at least 3 genres"
-  - Grid of 12 genre tiles with icons
-  - Selected genres highlighted
-  - Bottom: "Continue" button (disabled until 3+)
+  - Subheader: "You can change this later in settings"
+  - Three large tiles:
+    - 📚 **Books** — "Fiction, non-fiction, novels"
+    - 🦸 **Comics** — "Superhero, manga, graphic novels"
+    - ✨ **Both** — "The best of both worlds"
+  - Continue button (disabled until choice made)
 - **Actions:**
-  - Tap genre → Toggle selected
-  - Tap Continue → RateInitialBooks
-- **Data stored:** User preferences in DB
+  - Tap tile → Select
+  - Tap Continue → RateInitialContent
+- **Backend:** Stored temporarily, saved with preferences on onboarding complete
 
-#### RateInitialBooks
-- **Purpose:** Solve cold-start problem (part 2)
+#### RateInitialContentScreen 🔄 (Updated in v2.0)
+- **Purpose:** Solve cold start with content matching user's preference
 - **Elements:**
-  - Header: "Rate a few books you've read"
+  - Header: "Rate a few [books/comics/items] you love"
   - Progress: "X of 5 rated"
-  - Vertical list of 15 popular books (from selected genres)
-  - Each book: cover, title, author, 5-star rating input
-  - "Haven't read this" button
+  - Content shown depends on ContentChoice:
+    - Books only → 15 popular books
+    - Comics only → 15 popular comic issues
+    - Both → 8 books + 7 comics mixed
+  - Each item: cover, title, author/creator, 5-star input, "Haven't read" skip
   - Continue button (enabled at 5 ratings)
 - **Actions:**
-  - Tap stars → Set rating (1-5)
-  - Tap "Haven't read" → Skip to next
-  - Rate 5+ books → Enable Continue
-  - Tap Continue → PersonalizingScreen
-- **Backend:** POST `/api/v1/ratings` (bulk)
-
-#### PersonalizingScreen (2-3 seconds)
-- **Purpose:** Set expectation + build anticipation
-- **Elements:**
-  - Bee mascot animation
-  - "Kit is analyzing your taste..."
-  - Animated progress bar
-  - Rotating fun facts: "Did you know? Kitabee uses 8 AI models..."
-- **Actions:** None (auto-transition)
-- **Backend:** Trigger ML model refresh (async)
-- **Duration:** Min 2s (feel important), max 5s (patience limit)
+  - Tap stars → Set rating
+  - Tap "Haven't read" → Next item
+  - 5+ ratings → Continue enabled
+- **Backend:** POST /api/v1/books/{id}/ratings OR /api/v1/comics/{id}/ratings
 
 ---
 
 ## 🔐 Flow 2: Returning User Login
 
 ### Purpose
-Get returning users to their personalized home in under 10 seconds.
+Get returning users to their Netflix-style home in under 10 seconds.
 
-### Complete Flow
-
-```
-┌─────────────────┐
-│ App Launched    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ SplashScreen 🔄 │  Check: Stored JWT valid?
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │ Token?  │
-    └─┬─────┬─┘
-      │ Yes │ No
-      ▼     ▼
-┌─────────┐┌──────────┐
-│Validate ││ Welcome  │
-│ token   ││ Screen   │
-└────┬────┘└────┬─────┘
-     │          │
- ┌───┴───┐      ▼
- │Valid? │  ┌────────┐
- └─┬───┬─┘  │ Login  │
-   │Yes│No  │ Screen │
-   │   │    └───┬────┘
-   │   │        │
-   │   └────────┤
-   │            ▼
-   │       [Enter creds]
-   │            │
-   │            ▼
-   │       [Validate]
-   │            │
-   │       ┌────┴────┐
-   │       │Success? │
-   │       └─┬─────┬─┘
-   │         │Yes  │No
-   │         │     │
-   │         │     ▼
-   │         │  [Error toast]
-   │         │  "Invalid email/password"
-   │         │
-   │         │  ┌──────────────┐
-   │         │  │ Forgot Pass? │
-   │         │  │ (Post-MVP)   │
-   │         │  └──────────────┘
-   │         │
-   ▼         ▼
-┌─────────────────┐
-│  HomeScreen ✅  │  User arrives home
-└─────────────────┘
-```
+*[Flow logic unchanged from v1.0 — Login → Home. Only home screen destination is different (Netflix rows instead of simple recommendation lists).]*
 
 ### Login Screen Details
 
@@ -514,11 +419,8 @@ Get returning users to their personalized home in under 10 seconds.
   - Back button → Welcome
   - Title: "Welcome back!"
   - Email field
-  - Password field (with show/hide toggle)
-  - "Forgot password?" link (Post-MVP: shows "Coming soon")
+  - Password field with show/hide toggle
   - "Sign In" button
-  - Divider: "or"
-  - Social sign-in (Post-MVP)
   - "New here? Create account" link
 - **Validation:**
   - Email format check
@@ -527,50 +429,73 @@ Get returning users to their personalized home in under 10 seconds.
   - Submit → API call
   - Success → HomeScreen (skip onboarding if `onboarding_completed=true`)
   - Failure → Error toast with retry
-- **Backend:** POST `/api/v1/auth/login`
+- **Backend:** POST /api/v1/auth/login
 
 ---
 
-## 📚 Flow 3: Book Discovery (Home Screen)
+## 🎬 Flow 3: Netflix-Style Discovery (Home) 🆕
 
 ### Purpose
-Present personalized recommendations that inspire the user to explore books.
+Present personalized themed collection rows that feel exactly like Netflix — familiar, engaging, endlessly scrollable.
 
-### Home Screen Layout
+### Home Screen Layout (Completely Redesigned v2.0)
 
 ```
 ┌─────────────────────────────────────────┐
 │  Kitabee                    🔔  ⚙️      │  Header
 ├─────────────────────────────────────────┤
 │                                         │
-│  Good evening, Priya 👋                 │  Personalized greeting
+│  Good evening, Priya 👋                 │  Greeting
 │                                         │
 │  ┌────────────────────────────────────┐ │
-│  │ 🎯 Recommended for You             │ │
+│  │ ▶ Continue Reading                 │ │  If reading progress exists
 │  │                                    │ │
-│  │ [Book1] [Book2] [Book3] [Book4]  ►│ │  Horizontal scroll
-│  │                                    │ │
+│  │ [Book] ────────                    │ │
+│  │ Sapiens - 45% complete             │ │
+│  │ ▓▓▓▓▓░░░░░                         │ │  Progress bar
 │  └────────────────────────────────────┘ │
 │                                         │
 │  ┌────────────────────────────────────┐ │
-│  │ 🔥 Trending Now                    │ │
+│  │ 🔥 Because You Loved Dune...       │ │  PERSONALIZED ROW
 │  │                                    │ │
-│  │ [Book1] [Book2] [Book3] [Book4]  ►│ │
-│  │                                    │ │
+│  │ [Cover] [Cover] [Cover] [Cover] ►  │ │  Horizontal scroll
+│  │                                    │ │  8-12 items
 │  └────────────────────────────────────┘ │
 │                                         │
 │  ┌────────────────────────────────────┐ │
-│  │ 👥 Readers Like You Loved          │ │
+│  │ 🌍 Epic Worlds Built From Scratch  │ │  MOOD-BASED ROW
 │  │                                    │ │
-│  │ [Book1] [Book2] [Book3] [Book4]  ►│ │
-│  │                                    │ │
+│  │ [Cover] [Cover] [Cover] [Cover] ►  │ │
 │  └────────────────────────────────────┘ │
 │                                         │
 │  ┌────────────────────────────────────┐ │
-│  │ 📖 Based on [Recent Rating]        │ │
+│  │ 📖 Free to Read Right Now          │ │  FREE READING ROW
 │  │                                    │ │
-│  │ [Book1] [Book2] [Book3] [Book4]  ►│ │
+│  │ [Cover🆓][Cover🆓][Cover🆓][Cover🆓]│ │  Free badges visible
+│  └────────────────────────────────────┘ │
+│                                         │
+│  ┌────────────────────────────────────┐ │
+│  │ 🦸 Comics — Perfect Starting Point │ │  COMICS ROW
+│  │                                    │ │  (if comics enabled)
+│  │ [Cover] [Cover] [Cover] [Cover] ►  │ │
+│  └────────────────────────────────────┘ │
+│                                         │
+│  ┌────────────────────────────────────┐ │
+│  │ ✅ Complete Series — Start to Fin  │ │  SERIES ROW
 │  │                                    │ │
+│  │ [Cover] [Cover] [Cover] [Cover] ►  │ │
+│  └────────────────────────────────────┘ │
+│                                         │
+│  ┌────────────────────────────────────┐ │
+│  │ 💎 Hidden Gems You Will Love       │ │  DISCOVERY ROW
+│  │                                    │ │
+│  │ [Cover] [Cover] [Cover] [Cover] ►  │ │
+│  └────────────────────────────────────┘ │
+│                                         │
+│  ┌────────────────────────────────────┐ │
+│  │ 🔥 Everyone Is Reading This        │ │  TRENDING ROW
+│  │                                    │ │
+│  │ [Cover] [Cover] [Cover] [Cover] ►  │ │
 │  └────────────────────────────────────┘ │
 │                                         │
 ├─────────────────────────────────────────┤
@@ -587,9 +512,7 @@ Present personalized recommendations that inspire the user to explore books.
          │
          ▼
     [Fetch data]
-    ├─ GET /recommendations
-    ├─ GET /books/trending
-    └─ GET /users/me
+    GET /api/v1/collections
          │
     ┌────┴────┐
     │Success? │
@@ -597,98 +520,155 @@ Present personalized recommendations that inspire the user to explore books.
       │Yes  │No
       ▼     ▼
 ┌──────────┐┌──────────────┐
-│ Show     ││ Error state  │
-│ sections ││ + Retry btn  │
-└────┬─────┘└──────────────┘
+│ Render 6+ ││ Error state  │
+│ collection││ + Retry btn  │
+│  rows     │└──────────────┘
+└────┬─────┘
      │
      ▼
 [User Actions]
      │
-     ├─► Tap book card ────► BookDetailsScreen
+     ├─► Tap content card ─────► DetailScreen(id, type)
      │
-     ├─► Swipe horizontally ─► Scroll section
+     ├─► Swipe horizontally ───► Scroll within row
      │
-     ├─► Pull to refresh ────► Re-fetch data
+     ├─► Tap row title ────────► FullCollectionScreen(name)
      │
-     ├─► Tap "See all" ──────► Section list view (Post-MVP)
+     ├─► Pull to refresh ──────► Re-fetch /collections
      │
-     └─► Tap bell icon ──────► Notifications (Post-MVP)
+     ├─► Tap Continue Reading ─► Reader Screen (EPUB or Comics)
+     │
+     └─► Scroll down ──────────► View more collection rows
 ```
 
-### Book Card Component
+### Content Card Component (v2.0)
 
 ```
 ┌──────────────┐
 │              │
-│  📚          │  Book cover (2:3 ratio)
-│  [Cover]     │  
-│              │
+│  📚          │  Cover image (2:3 ratio)
+│  [Cover]     │
+│  🆓          │  Free badge (if applicable)
 ├──────────────┤
-│ Book Title   │  1-2 lines (truncated)
-│ Author Name  │  1 line
-│ ⭐ 4.5       │  Average rating
+│ Title        │  1-2 lines truncated
+│ Author       │  1 line
+│ ⭐ 4.5       │  Kitabee rating
 └──────────────┘
 
-On tap: Navigate to BookDetailsScreen
+On tap: Navigate to DetailScreen
 Long press: Quick actions (Add to library, Rate)
 ```
 
-### Personalization Logic
+### Collection Row Component 🆕 (v2.0)
 
-**"Recommended for You" section:**
-- Powered by hybrid ML model (Content + Collaborative + Neural)
-- Refreshed every 24 hours OR on new rating
-- Shows top 10 books
-- Each book has "Why?" tooltip explaining the recommendation
+```
+Row structure:
+┌────────────────────────────────────────┐
+│ [Emoji] Catchy Collection Title  See all → │
+├────────────────────────────────────────┤
+│ [Card] [Card] [Card] [Card] [Card] ►    │
+└────────────────────────────────────────┘
 
-**"Trending Now" section:**
-- NYT Books API bestsellers
-- Filtered by user's preferred genres
-- Refreshed weekly
+Behavior:
+- Row title tap → FullCollectionScreen
+- Card tap → DetailScreen
+- Horizontal scroll with paging
+- Lazy load additional cards
+- Loading skeleton while data fetches
+```
 
-**"Readers Like You Loved" section:**
-- KMeans clustering finds similar users
-- Books highly rated by cluster mates
-- User hasn't rated these
+### FullCollectionScreen 🆕 (v2.0)
 
-**"Based on [Recent Rating]" section:**
-- TF-IDF similar books to user's last 5-star rating
-- Direct connection: "You loved X, try Y"
+```
+┌─────────────────────────────────────────┐
+│  ← Epic Worlds Built From Scratch       │
+│  12 books · Updated today               │
+├─────────────────────────────────────────┤
+│                                         │
+│  Immersive fantasy worlds you can       │
+│  lose yourself in for weeks             │
+│                                         │
+│  ┌────┐ ┌────┐ ┌────┐                   │
+│  │📚 │ │📚 │ │📚 │                     │  3-column grid
+│  │Dune│ │WoT │ │NotW│                   │
+│  └────┘ └────┘ └────┘                   │
+│                                         │
+│  ┌────┐ ┌────┐ ┌────┐                   │
+│  │📚 │ │📚 │ │📚 │                     │
+│  └────┘ └────┘ └────┘                   │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+### Personalization Logic (v2.0)
+
+**"Because You Loved [X]..." row:**
+- Generated by Personalizer (KNN collaborative filter)
+- X = user's top-rated recent book/comic
+- Only shows if user has 5+ ratings
+
+**Mood-based rows (e.g. "Epic Worlds Built From Scratch"):**
+- Generated by Collection Engine (KMeans + mood detection)
+- Multiple mood rows shown based on user taste
+- Rotate to avoid staleness
+
+**"Free to Read Right Now" row:**
+- Sourced from Internet Archive (public domain)
+- Always present on home screen
+- Mix of books and comics if user enabled both
+
+**"Complete Series" row:**
+- Series Intelligence identifies completed series
+- User hasn't started these series yet
+- Filtered by user's genre preferences
+
+**"Comics — Perfect Starting Points" row:**
+- Only shown if user enabled comics in preferences
+- Beginner-friendly comic entry points
+- E.g. Batman: Year One, Watchmen, Persepolis
+
+**"Everyone Is Reading This" row:**
+- Trending calculation from recent activity
+- Global (not personalized)
+- Cached weekly
 
 ---
 
-## 🔍 Flow 4: Book Search
+## 🔍 Flow 4: Search (Books + Comics) 🔄
 
 ### Purpose
-Enable users to find any book by title, author, or ISBN in real-time.
+Enable users to find any book OR comic by title, author, character, or ISBN in real-time.
 
-### Search Screen Layout
+### Search Screen Layout (Updated v2.0)
 
 ```
 ┌─────────────────────────────────────────┐
 │  ┌────────────────────────────────┐ ✕   │
-│  │ 🔍 Search books, authors...    │     │  Search input
+│  │ 🔍 Search books, comics...     │     │
 │  └────────────────────────────────┘     │
 ├─────────────────────────────────────────┤
 │                                         │
-│  Filter by: [All ▼] [Genre ▼]           │  Filter chips
+│  [ All ] [ Books ] [ Comics ]           │  Content type tabs 🆕
+│  ─────                                  │  Active tab underlined
 │                                         │
-│  Popular searches:                      │  When empty
-│  #Fiction #SciFi #Biography             │
+│  Filter by: [Genre ▼] [Free only ☐]     │  Filters + Free toggle 🆕
 │                                         │
-│  Recent searches:                       │  When user has history
+│  Popular searches:                      │  Empty state
+│  #Fiction #Manga #Superhero #SciFi      │
+│                                         │
+│  Recent searches:                       │
 │  🕐 Sapiens                             │
-│  🕐 Harry Potter                        │
-│  🕐 Atomic Habits                       │
+│  🕐 Batman: Year One                    │  Mix of books + comics
+│  🕐 Attack on Titan                     │
 │                                         │
 ├─────────────────────────────────────────┤
 ```
 
-### Search Flow
+### Search Flow (Updated v2.0)
 
 ```
 ┌─────────────────┐
-│  SearchScreen   │  Empty state on entry
+│  SearchScreen   │
 └────────┬────────┘
          │
     [User types]
@@ -698,95 +678,87 @@ Enable users to find any book by title, author, or ISBN in real-time.
          ▼
     [Show loading]
          │
+    [Determine content type from active tab]
+         │
+    ┌────┴────────────────┐
+    │ Which tab active?   │
+    └──┬──────────┬───────┬┘
+       │ All      │ Books │ Comics
+       ▼          ▼       ▼
+   [GET /search/all]  [GET /books/search]  [GET /comics/search]
+       │          │       │
+       └──────┬───┴───────┘
+              ▼
+       [Try cache]
+              │
+       ┌──────┴──┐
+       │ Cached? │
+       └─┬─────┬─┘
+         │Yes  │No
+         │     ▼
+         │ [Fetch from primary API]
+         │     │
+         │     ▼
+         │ [Cache result 30m]
+         ▼     │
+    [Show results]
+         │
     ┌────┴────┐
-    │Query    │
-    │valid?   │
+    │Results? │
     └─┬─────┬─┘
-      │Yes  │No (< 2 chars)
-      │     ▼
-      │  [Show suggestions]
-      │
-      ▼
-[GET /api/v1/books/search?q=...]
-      │
-      ▼
-[Try Redis cache]
-      │
-  ┌───┴────┐
-  │ Cached?│
-  └─┬────┬─┘
-    │Yes │No
-    │    ▼
-    │ [Try Google Books API]
-    │    │
-    │ ┌──┴──┐
-    │ │OK?  │
-    │ └┬──┬─┘
-    │  │Y │N
-    │  │  ▼
-    │  │ [Fallback to Open Library]
-    │  │  │
-    │  │  └───┐
-    │  ▼      ▼
-    │ [Cache result]
-    │  │
-    ▼  ▼
-[Show results]
+      │Yes  │No
+      ▼     ▼
+[Display] [Empty state]
+      │   "No matches"
       │
       ▼
 [User Actions]
       │
-      ├─► Tap result ────► BookDetailsScreen
+      ├─► Tap result ────► DetailScreen(id, type)
+      │
+      ├─► Change tab ────► Refilter results
+      │
+      ├─► Toggle Free ───► Filter to free-only items
       │
       ├─► Clear search ──► Reset to empty state
       │
-      ├─► Apply filter ──► Refine results
-      │
-      └─► Scroll ────────► Pagination (load more)
+      └─► Scroll ────────► Pagination
+```
+
+### Search Result Card (v2.0)
+
+```
+┌────────────────────────────────────────┐
+│ ┌────┐                                 │
+│ │📚 │  Book Title                      │
+│ │Cvr│  by Author Name                  │
+│ │🆓│  📚 Book · ⭐ 4.5                 │  Type label + rating
+│ └────┘  Series: Book 1 of Trilogy       │  Series info if applicable
+└────────────────────────────────────────┘
+
+┌────────────────────────────────────────┐
+│ ┌────┐                                 │
+│ │🦸│  Comic Title                     │
+│ │Cvr│  by Creator Name                 │
+│ │  │  🦸 Comic · Issue #1 · ⭐ 4.8    │  Type + issue + rating
+│ └────┘  Publisher: DC Comics            │
+└────────────────────────────────────────┘
+
+Free badge (🆓) visible when Internet Archive has content
 ```
 
 ### Search States
 
-#### Empty State (First Visit)
-- Popular searches (tags)
-- Suggestions: "Try 'Sapiens' or 'Harry Potter'"
-
-#### Empty State (Returning User)
-- Recent searches (last 10)
-- Tap to re-search
-- Swipe to delete
-
-#### Loading State
-- Skeleton loaders (5 placeholder cards)
-- Shimmer effect
-
-#### Results State
-- Vertical list of book cards
-- Each card: cover, title, author, rating, "Add" button
-- Pagination: Load 20 at a time
-- Empty result: "No books found for 'xyz'. Try different keywords."
-
-#### Error State
-- Sad bee illustration 🐝
-- "Something went wrong"
-- "Retry" button
-
-### Search Optimizations
-
-- **Debouncing:** 300ms delay before API call
-- **Caching:** 30-minute Redis TTL for queries
-- **Prefetching:** Fetch details on card hover (web)
-- **History:** Store last 10 searches locally
-- **Autocomplete:** Show recent + popular suggestions
+*[Empty, Loading, Results, Error states unchanged from v1.0 — just include both books and comics]*
 
 ---
 
-## 📖 Flow 5: Book Details & Rating
+## 📖 Flow 5: Detail Page + Series Order 🔄
 
 ### Purpose
-Provide rich book information and enable users to rate/save books.
+Provide rich content information, enable rating/library, show series reading order guide (killer feature), enable free reading when available.
 
-### Book Details Screen Layout
+### Detail Screen Layout (Updated v2.0)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -795,39 +767,64 @@ Provide rich book information and enable users to rate/save books.
 │                                         │
 │         ┌──────────────┐                │
 │         │              │                │
-│         │              │                │
 │         │   [Cover]    │                │  Hero section
-│         │              │                │  (Blurred bg with cover)
 │         │              │                │
 │         └──────────────┘                │
 │                                         │
-│         Sapiens                         │  Title
-│         by Yuval Noah Harari            │  Author
-│         ⭐ 4.5 (12,345 ratings)         │  Rating summary
+│         Dune                            │  Title
+│         by Frank Herbert                │  Author
+│         📚 Book · ⭐ 4.5 (12,345)       │  Type + Rating
 │                                         │
 │  ┌──────────┬──────────┬──────────┐     │
-│  │ +Library │  Rate    │  Share   │     │  Action buttons
-│  └──────────┴──────────┴──────────┘     │
+│  │📖 Free  │ +Library │  Rate    │     │  Actions
+│  │  Read    │          │          │     │  "Free Read" only if
+│  └──────────┴──────────┴──────────┘     │  Internet Archive has it
 │                                         │
 │  ─────────────────────────────────────  │
 │                                         │
 │  🎯 Why we recommend this               │  AI explanation
-│  Based on your love for "Homo Deus"     │  (Only if from recs)
-│  and 87% of users like you.             │
+│  Based on your love for "Foundation"    │  (if from personalized row)
+│  and 87% of similar readers enjoyed it. │
+│                                         │
+│  ─────────────────────────────────────  │
+│                                         │
+│  🔢 DUNE SERIES — Reading Order         │  SERIES ORDER SECTION 🆕
+│                                         │  (only if part of series)
+│  📖 Main Series:                        │
+│  1. Dune ← You are here                 │
+│  2. Dune Messiah                        │
+│  3. Children of Dune                    │
+│  4. God Emperor of Dune                 │
+│  5. Heretics of Dune                    │
+│  6. Chapterhouse: Dune                  │
+│                                         │
+│  💡 Tip: Books 1-3 are the core         │
+│     trilogy. Books 4-6 are for          │
+│     dedicated fans.                     │
+│                                         │
+│  🔀 Prequel Series (by Brian Herbert):  │
+│  1. House Atreides                      │
+│  2. House Harkonnen                     │
+│  3. House Corrino                       │
+│                                         │
+│  💡 Read after Book 1 or after all 6.   │
 │                                         │
 │  ─────────────────────────────────────  │
 │                                         │
 │  📖 About                               │
-│  Sapiens is a compelling narrative of   │  Description
-│  humanity from cave-dwellers to...      │  (Read more)
+│  In the far future of humanity, the     │  Description
+│  young Paul Atreides accompanies his    │  Show more/less
+│  family to the desert planet Arrakis... │
+│                                         │
+│  🎭 Mood: epic · thoughtful · grand     │  Mood tags 🆕
 │                                         │
 │  ─────────────────────────────────────  │
 │                                         │
-│  💬 Sentiment Analysis                  │  NLP feature
+│  💬 Sentiment Analysis                  │
 │  ┌────────────────────────────────┐     │
-│  │ 😊 Positive: 78%               │     │
-│  │ 😐 Neutral:  15%               │     │
-│  │ 😞 Negative:  7%               │     │
+│  │ 😊 Positive: 82%               │     │
+│  │ 😐 Neutral:  13%               │     │
+│  │ 😞 Negative:  5%               │     │
 │  └────────────────────────────────┘     │
 │                                         │
 │  ─────────────────────────────────────  │
@@ -838,24 +835,25 @@ Provide rich book information and enable users to rate/save books.
 │  ─────────────────────────────────────  │
 │                                         │
 │  ℹ️ Details                             │
-│  Published: 2011                        │
-│  Pages: 464                             │
-│  Publisher: Harper                      │
-│  ISBN: 978-0062316097                   │
+│  Published: 1965                        │
+│  Pages: 688                             │
+│  Publisher: Chilton Books               │
+│  ISBN: 978-0441172719                   │
 │                                         │
 └─────────────────────────────────────────┘
 ```
 
-### Book Details Flow
+### Detail Screen Flow (Updated v2.0)
 
 ```
 ┌─────────────────────┐
-│ BookDetailsScreen 🔄│
+│ DetailScreen 🔄     │
+│ (books or comics)   │
 └──────────┬──────────┘
            │
            ▼
-      [Fetch book data]
-      GET /books/{id}
+      [Fetch content data]
+      GET /books/{id} OR /comics/{id}
            │
        ┌───┴────┐
        │Cached? │
@@ -865,54 +863,108 @@ Provide rich book information and enable users to rate/save books.
          │ [Fetch from API]
          │    │
          │    ▼
-         │ [Cache in Redis]
+         │ [Cache 24h]
          ▼    │
       ┌──────┘
       ▼
-   [Fetch related]
-   ├─ Similar books
+   [Fetch related in parallel]
+   ├─ GET /books/{id}/series or /comics/{id}/series
+   ├─ Similar items
    ├─ User rating (if any)
-   └─ Sentiment analysis
+   ├─ Reading progress (if any)
+   └─ Free reading availability
       │
       ▼
-   [Render screen]
+   [Render screen with sections]
+   ├─ Series Order (if is_series)
+   ├─ Free Read button (if is_free_online)
+   └─ All standard sections
       │
       ▼
 [User Actions]
       │
-      ├─► Tap "+ Library" ─► Show library modal
-      │                       │
-      │                       ├─ Want to Read
-      │                       ├─ Currently Reading
-      │                       └─ Read
+      ├─► Tap "Free Read" 🆕 ──► ReaderScreen (EPUB or Comics)
       │
-      ├─► Tap "Rate" ──────► Show RatingModal
-      │                       │
-      │                       └─► [Rate flow below]
+      ├─► Tap "+ Library" ────► Library modal
+      │                         │
+      │                         ├─ Want to Read
+      │                         ├─ Currently Reading
+      │                         └─ Read
       │
-      ├─► Tap "Share" ─────► Native share dialog
+      ├─► Tap "Rate" ──────────► RatingModal
       │
-      ├─► Tap similar book ► New BookDetailsScreen
+      ├─► Tap series entry ────► New DetailScreen for that entry
       │
-      └─► Tap "Read more" ─► Expand description
+      ├─► Tap similar item ────► New DetailScreen
+      │
+      └─► Tap "Show more" ─────► Expand description
 ```
+
+### Series Order Section 🆕 (v2.0)
+
+**Data source:** GET /api/v1/books/{id}/series or /api/v1/comics/{id}/series
+
+**Rendering rules:**
+- Only shown if content is part of a detected series
+- "You are here" indicator on current entry
+- "Start Here" label on first main entry
+- "Prequel" / "Spinoff" labels where applicable
+- Tips shown for complex universes
+- Companion series (prequels, spinoffs) shown separately
+- Each entry is tappable → navigates to that entry's detail page
+
+**Example variations:**
+
+```
+Simple trilogy:
+🔢 LORD OF THE RINGS
+1. The Fellowship of the Ring ← You are here
+2. The Two Towers
+3. The Return of the King
+
+Complex universe (comics):
+🔢 BATMAN — Where To Start
+📖 New Reader Path:
+1. Batman: Year One ← You are here
+2. The Long Halloween
+3. The Dark Knight Returns
+
+📖 Complete Path:
+1. Batman: Year One
+2. Batman: The Killing Joke
+3. Knightfall
+...
+💡 Tip: DC continuity is complex.
+        These are standalone-friendly picks.
+```
+
+---
+
+## ⭐ Flow 6: Rating Content
+
+### Purpose
+Enable users to rate books and comics on a 5-star scale with optional review.
+
+*[Flow logic unchanged from v1.0 — same modal, same UX. Just works for both books and comics now.]*
 
 ### Rating Modal Flow
 
 ```
 ┌────────────────────────┐
-│    Rate this book      │
+│    Rate this [book]    │
 ├────────────────────────┤
 │                        │
 │  How would you rate    │
-│  "Sapiens"?            │
+│  "Dune"?               │
 │                        │
-│    ⭐ ⭐ ⭐ ⭐ ⭐       │  Interactive stars
+│    ⭐ ⭐ ⭐ ⭐ ⭐       │
 │                        │
 │  ┌──────────────────┐  │
-│  │ Add a review     │  │  Optional text
+│  │ Add a review     │  │  Optional
 │  │ (optional)       │  │
 │  └──────────────────┘  │
+│                        │
+│  ☐ Contains spoilers   │  Toggle 🆕
 │                        │
 │  ┌──────────────────┐  │
 │  │    Submit        │  │
@@ -922,64 +974,60 @@ Provide rich book information and enable users to rate/save books.
 └────────────────────────┘
 
 Flow:
-[Tap stars] → [Optional review] → [Submit]
-                                     │
-                                     ▼
-                              [POST /ratings]
-                                     │
-                                 ┌───┴────┐
-                                 │Success?│
-                                 └─┬────┬─┘
-                                   │Yes │No
-                                   ▼    ▼
-                              [Success ┌────────┐
-                               toast]  │Error   │
-                                       │toast   │
-                                   │   └────────┘
-                                   ▼
-                              [Modal closes]
-                                   │
-                                   ▼
-                              [Recommendations
-                               refresh async]
+[Tap stars] → [Optional review] → [Optional spoiler flag] → [Submit]
+                                                              │
+                                                              ▼
+                                                    [POST /ratings]
+                                                    (books or comics)
+                                                              │
+                                                       ┌──────┴──────┐
+                                                       │  Success?   │
+                                                       └─┬─────────┬─┘
+                                                         │Yes      │No
+                                                         ▼         ▼
+                                                    [Success   [Error toast]
+                                                     toast]
+                                                         │
+                                                         ▼
+                                                    [Modal closes]
+                                                         │
+                                                         ▼
+                                                    [Home collections
+                                                     refresh async]
 ```
 
 ---
 
-## 📚 Flow 6: Personal Library Management
+## 📚 Flow 7: Personal Library 🔄
 
 ### Purpose
-Let users organize books they've engaged with into meaningful categories.
+Let users organize books AND comics into meaningful categories.
 
-### Library Screen Layout
+### Library Screen Layout (Updated v2.0)
 
 ```
 ┌─────────────────────────────────────────┐
 │  My Library                        🔍   │  Header
 ├─────────────────────────────────────────┤
 │                                         │
-│  Want (12) │ Reading (3) │ Read (47)    │  Tabs
-│  ─────────                              │  Active tab underlined
+│  [ All ] [ Books ] [ Comics ]           │  Content type toggle 🆕
 │                                         │
-│  Sort by: [Recently added ▼]            │  Sort options
-│  View: [Grid] [List]                    │  View toggle
+│  Want (24) │ Reading (5) │ Read (68)    │  Status tabs
+│  ─────────                              │
+│                                         │
+│  Sort by: [Recently added ▼]            │
+│  View: [Grid] [List]                    │
 │                                         │
 │  ┌────┐ ┌────┐ ┌────┐                   │
-│  │📚 │ │📚 │ │📚 │                     │  Book grid
-│  │Cvr│ │Cvr│ │Cvr│                     │
+│  │📚 │ │🦸│ │📚 │                     │  Books + comics mixed
+│  │Cvr│ │Cvr│ │Cvr│                     │  (or filtered by type)
 │  └────┘ └────┘ └────┘                   │
 │  Title  Title  Title                    │
-│  Author Author Author                   │
-│                                         │
-│  ┌────┐ ┌────┐ ┌────┐                   │
-│  │📚 │ │📚 │ │📚 │                     │
-│  │Cvr│ │Cvr│ │Cvr│                     │
-│  └────┘ └────┘ └────┘                   │
 │                                         │
 └─────────────────────────────────────────┘
 ```
 
-### Library Flow
+### Library Flow (Updated v2.0)
 
 ```
 ┌─────────────────┐
@@ -987,8 +1035,14 @@ Let users organize books they've engaged with into meaningful categories.
 └────────┬────────┘
          │
          ▼
-    [Load library]
-    GET /library?status=want_to_read
+    [Determine active content filter]
+    [Determine active status tab]
+         │
+         ▼
+    [Load library based on filters]
+    ├─ GET /library?status={status}
+    ├─ GET /comics/library?status={status}
+    └─ Merge if "All" content type selected
          │
     ┌────┴────┐
     │ Empty?  │
@@ -1000,64 +1054,217 @@ Let users organize books they've engaged with into meaningful categories.
       ▼
 ┌──────────────────┐
 │  Empty state 📭  │  "Your library is empty"
-│  🐝              │  "Start by rating books!"
-│  [Explore books] │  CTA → HomeScreen
+│  🐝              │  "Start by rating books or comics!"
+│  [Explore]       │  CTA → HomeScreen
 └──────────────────┘
 
 [User Actions]
       │
-      ├─► Tap tab ────────► Filter by status
+      ├─► Change content type ──► Refilter (books/comics/all)
       │
-      ├─► Tap book ───────► BookDetailsScreen
+      ├─► Change status tab ────► Refilter by status
       │
-      ├─► Long press ─────► Quick actions menu
-      │                     │
-      │                     ├─ Move to "Reading"
-      │                     ├─ Move to "Read"
-      │                     ├─ Remove from library
-      │                     └─ Rate (if not rated)
+      ├─► Tap item ─────────────► DetailScreen
       │
-      ├─► Change sort ────► Re-order list
+      ├─► Long press ───────────► Quick actions
+      │                            ├─ Move status
+      │                            └─ Remove
       │
-      └─► Toggle view ────► Grid ↔ List
-```
-
-### Library Status Transitions
-
-```
-       ┌───────────────┐
-       │ Want to Read  │
-       └───────┬───────┘
-               │
-     "Start Reading"
-               │
-               ▼
-       ┌───────────────┐
-       │Currently      │
-       │Reading        │
-       └───────┬───────┘
-               │
-      "Mark as Read"
-               │
-               ▼
-       ┌───────────────┐
-       │     Read      │
-       └───────────────┘
-
-Additional flows:
-- Remove: Any status → Removed
-- Add: Book Details → Want to Read (default)
-- Direct add: Rated 4-5 stars → Prompt "Add to Read?"
+      ├─► Change sort ──────────► Re-order list
+      │
+      └─► Toggle view ──────────► Grid ↔ List
 ```
 
 ---
 
-## 📊 Flow 7: Reading Insights (DNA)
+## 📖 Flow 8: Free Reading (EPUB + Comics) 🆕
 
 ### Purpose
-Show users their unique reading personality through beautiful data visualizations.
+Enable users to read public domain books and comics directly inside the app via Internet Archive.
 
-### Insights Screen Layout
+### Free Reading Entry Points
+
+- Tap "Free Read" button on DetailScreen (books or comics)
+- Tap "Continue Reading" row item on HomeScreen
+- Tap item in "Free to Read Right Now" collection row
+
+### Free Reading Flow (Books)
+
+```
+┌─────────────────┐
+│  DetailScreen   │  User on book detail
+└────────┬────────┘
+         │
+    [Tap "Free Read"]
+         │
+         ▼
+    [Fetch reading link]
+    GET /api/v1/reading/{book_id}/link
+         │
+    ┌────┴────┐
+    │Success? │
+    └─┬─────┬─┘
+      │Yes  │No
+      │     ▼
+      │  [Error toast]
+      │  "Content unavailable"
+      ▼
+┌─────────────────────┐
+│ EPUBReaderScreen 🆕 │
+│                     │
+│ ┌─────────────────┐ │
+│ │                 │ │
+│ │  [Book content  │ │  EPUB rendered
+│ │   in WebView    │ │  via EPUB.js
+│ │   using EPUB.js]│ │
+│ │                 │ │
+│ │                 │ │
+│ └─────────────────┘ │
+│                     │
+│ Progress: 45%       │  Progress bar
+│ [◄]  Chapter 5  [►] │  Navigation
+└──────────┬──────────┘
+           │
+    [User reads, swipes pages]
+           │
+    [EPUB.js posts progress via postMessage]
+           │
+           ▼
+    [Debounced 5s]
+    PATCH /api/v1/reading/{book_id}/progress
+           │
+           ▼
+    [Progress saved]
+           │
+    [User exits]
+           │
+           ▼
+    [Return to DetailScreen or Home]
+    [Continue Reading row updated]
+```
+
+### EPUB Reader Screen 🆕
+
+```
+┌─────────────────────────────────────────┐
+│  ←  Dune                          ⚙️    │  Header
+├─────────────────────────────────────────┤
+│                                         │
+│                                         │
+│  Chapter 5: Arrakis                     │
+│                                         │
+│  The Duke Leto stood at the balcony     │
+│  overlooking the vast desert. His son   │
+│  Paul stood beside him, taking in the   │
+│  sight of their new home for the first  │
+│  time...                                │
+│                                         │
+│  [Story text rendered by EPUB.js]       │
+│                                         │
+│  [Long body of text with proper         │
+│   typography, spacing, font choice]     │
+│                                         │
+│                                         │
+├─────────────────────────────────────────┤
+│  [◄ Prev]  Ch 5 · 45%  [Next ►]         │  Nav + Progress
+└─────────────────────────────────────────┘
+
+Gestures:
+- Swipe left/right → Page turn
+- Tap left edge → Previous page
+- Tap right edge → Next page
+- Tap center → Show/hide UI chrome
+- Back button → Save + exit
+```
+
+### Free Reading Flow (Comics)
+
+```
+┌─────────────────┐
+│  DetailScreen   │  User on comic detail
+└────────┬────────┘
+         │
+    [Tap "Free Read"]
+         │
+         ▼
+    [Fetch reading link]
+    GET /api/v1/reading/{comic_id}/link
+         │
+    ┌────┴────┐
+    │Success? │
+    └─┬─────┬─┘
+      │Yes  │No
+      │     ▼
+      │  [Error toast]
+      ▼
+┌─────────────────────┐
+│ ComicsReaderScreen  │
+│  🆕                 │
+│ ┌─────────────────┐ │
+│ │                 │ │
+│ │                 │ │
+│ │  [Comic page    │ │  Image rendered
+│ │   image from    │ │  full screen
+│ │   Internet      │ │
+│ │   Archive]      │ │
+│ │                 │ │
+│ │                 │ │
+│ └─────────────────┘ │
+│                     │
+│    Page 5 of 32     │  Page indicator
+└──────────┬──────────┘
+           │
+    [User swipes]
+           │
+           ▼
+    [Load next/prev page image]
+    [Pre-load 2 pages ahead]
+           │
+           ▼
+    [Update progress on page change]
+    PATCH /reading/{comic_id}/progress
+           │
+    [User exits]
+           │
+           ▼
+    [Return to DetailScreen or Home]
+```
+
+### Comics Reader Screen 🆕
+
+```
+┌─────────────────────────────────────────┐
+│  ←  Batman: Year One            ⚙️      │  Header (fades)
+├─────────────────────────────────────────┤
+│                                         │
+│                                         │
+│                                         │
+│         [FULL PAGE IMAGE]               │  Comic page image
+│                                         │  (full-screen)
+│                                         │
+│                                         │
+│                                         │
+├─────────────────────────────────────────┤
+│           Page 5 of 32                  │  Fades after 2s
+└─────────────────────────────────────────┘
+
+Gestures:
+- Swipe left → Next page
+- Swipe right → Previous page
+- Pinch → Zoom
+- Double tap → Zoom to fit
+- Tap center → Show/hide UI chrome
+- Back button → Save + exit
+```
+
+---
+
+## 📊 Flow 9: Reading Insights
+
+### Purpose
+Show users their unique reading personality through beautiful data visualizations covering both books and comics.
+
+### Insights Screen Layout (Updated v2.0)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -1065,135 +1272,81 @@ Show users their unique reading personality through beautiful data visualization
 ├─────────────────────────────────────────┤
 │                                         │
 │  ┌────────────────────────────────────┐ │
-│  │  🐝 You're a                       │ │  Personality
-│  │  "Contemplative Explorer"          │ │
+│  │  🐝 You are a                      │ │  Personality
+│  │  "Epic World Explorer"             │ │
 │  │                                    │ │
-│  │  You love complex characters,      │ │
-│  │  philosophical themes, and         │ │
-│  │  non-linear narratives.            │ │
+│  │  You love vast worlds, complex     │ │
+│  │  narratives, and diving deep       │ │
+│  │  into series universes.            │ │
 │  └────────────────────────────────────┘ │
 │                                         │
-│  📊 Genre Breakdown                     │  Pie chart
+│  📊 Books vs Comics                     │  NEW v2.0
 │  ┌────────────────────────────────────┐ │
-│  │      ┌─────┐                       │ │
-│  │      │Fic  │ 40%                   │ │
-│  │      │Non  │ 30%                   │ │
-│  │      │SciFi│ 20%                   │ │
-│  │      │Other│ 10%                   │ │
-│  │      └─────┘                       │ │
+│  │  📚 Books:  65%                    │ │
+│  │  🦸 Comics: 35%                    │ │
 │  └────────────────────────────────────┘ │
 │                                         │
-│  📈 Reading Pace (Last 6 Months)        │  Line chart
+│  📊 Genre Breakdown                     │
 │  ┌────────────────────────────────────┐ │
-│  │  📚                                │ │
-│  │  6│    ▲                           │ │
-│  │  4│   ╱ ╲   ▲                      │ │
-│  │  2│  ╱   ╲ ╱ ╲                     │ │
-│  │  0└──────────────                  │ │
-│  │    J F M A M J                     │ │
+│  │      Pie chart                     │ │
+│  │      Fiction 40%                   │ │
+│  │      Sci-Fi 30%                    │ │
+│  │      Superhero 15%                 │ │
+│  │      Non-fic 15%                   │ │
 │  └────────────────────────────────────┘ │
 │                                         │
-│  🏆 Top Authors                         │  List
-│  1. Yuval Noah Harari (3 books)         │
-│  2. Malcolm Gladwell (2 books)          │
-│  3. Michelle Obama (2 books)            │
-│                                         │
-│  🌍 Diversity Score                     │  Metric
+│  📈 Reading Pace (Last 6 Months)        │
 │  ┌────────────────────────────────────┐ │
-│  │  8.5/10                            │ │
-│  │  Above average! You explore        │ │
-│  │  diverse voices.                   │ │
+│  │  [Line chart]                      │ │
 │  └────────────────────────────────────┘ │
 │                                         │
-│  📅 Reading Timeline                    │  Optional
+│  🏆 Top Authors + Creators              │
+│  1. Frank Herbert (5 books)             │
+│  2. Frank Miller (3 comics)             │
+│  3. Brandon Sanderson (2 books)         │
+│                                         │
+│  🌍 Diversity Score                     │
+│  ┌────────────────────────────────────┐ │
+│  │  8.7/10                            │ │
+│  │  Above average!                    │ │
+│  └────────────────────────────────────┘ │
 │                                         │
 └─────────────────────────────────────────┘
 ```
 
 ### Insights Flow
 
-```
-┌──────────────────┐
-│ InsightsScreen 🔄│
-└────────┬─────────┘
-         │
-         ▼
-    [Fetch analytics]
-    GET /insights/dna
-         │
-    ┌────┴────┐
-    │Enough   │  Need 10+ rated books
-    │data?    │  for meaningful insights
-    └─┬─────┬─┘
-      │Yes  │No
-      │     ▼
-      │  ┌──────────────────┐
-      │  │  Empty state 📭  │
-      │  │  "Rate 10 books  │
-      │  │  to unlock your  │
-      │  │  Reading DNA"    │
-      │  │  Progress: 3/10  │
-      │  └──────────────────┘
-      ▼
-[Render dashboard]
-   │
-   ├─ Personality profile
-   ├─ Genre pie chart
-   ├─ Reading pace chart
-   ├─ Top authors
-   └─ Diversity score
-   │
-   ▼
-[User Actions]
-   │
-   ├─► Tap chart ─────► Detailed view
-   │
-   ├─► Tap share ─────► Generate image + share
-   │
-   └─► Pull refresh ──► Regenerate insights
-```
-
-### Reading DNA Personalities (Examples)
-
-- 🔮 **Contemplative Explorer** — Philosophy, deep non-fiction
-- 🎭 **Story Lover** — Fiction, character-driven narratives
-- 🚀 **Future Thinker** — Sci-fi, technology, futurism
-- 🧠 **Knowledge Seeker** — Non-fiction, education, self-help
-- 💔 **Emotion Reader** — Romance, drama, memoirs
-- 🕵️ **Mystery Detective** — Crime, thriller, suspense
-- 🌍 **Cultural Traveler** — International, diverse voices
-- 📖 **Classic Enthusiast** — Older, timeless literature
-
-**Algorithm:** KMeans clustering on user's rated books' features
+*[Same as v1.0 — needs 10+ rated items to unlock]*
 
 ---
 
-## 👤 Flow 8: Profile & Settings
+## 👤 Flow 10: Profile & Settings
 
-### Profile Screen Layout
+### Profile Screen Layout (Updated v2.0)
 
 ```
 ┌─────────────────────────────────────────┐
-│  Profile                          ⚙️    │  Header
+│  Profile                          ⚙️    │
 ├─────────────────────────────────────────┤
 │                                         │
 │         ┌──────────────┐                │
-│         │   [Avatar]   │                │  Profile pic
+│         │   [Avatar]   │                │
 │         └──────────────┘                │
 │                                         │
-│         Priya Sharma                    │  Name
-│         priya@example.com               │  Email
+│         Priya Sharma                    │
+│         priya@example.com               │
 │                                         │
-│  ┌───────┬───────┬───────┬───────┐      │  Stats
-│  │  47   │  12   │  4.2  │  8.5  │      │
-│  │Books  │In Lib │  Avg  │Divers │      │
-│  │ Read  │       │ Rating│ Score │      │
+│  ┌───────┬───────┬───────┬───────┐      │  Stats (Updated v2.0)
+│  │  47   │  15   │  4.2  │  8.5  │      │
+│  │Books  │Comics │  Avg  │Divers │      │  Books + Comics separate
+│  │ Read  │  Read │ Rating│ Score │      │
 │  └───────┴───────┴───────┴───────┘      │
 │                                         │
 │  ┌────────────────────────────────────┐ │
 │  │ 👤 Edit Profile             →      │ │
 │  ├────────────────────────────────────┤ │
-│  │ 🔔 Notifications            →      │ │
+│  │ 📚 Content Preference       →      │ │  NEW v2.0
+│  │    Books + Comics                  │ │  Books/Comics/Both toggle
 │  ├────────────────────────────────────┤ │
 │  │ 🎨 Theme              Light  →     │ │
 │  ├────────────────────────────────────┤ │
@@ -1205,7 +1358,7 @@ Show users their unique reading personality through beautiful data visualization
 │  └────────────────────────────────────┘ │
 │                                         │
 │  ┌────────────────────────────────────┐ │
-│  │        Log Out                     │ │  Danger action
+│  │        Log Out                     │ │
 │  └────────────────────────────────────┘ │
 │                                         │
 └─────────────────────────────────────────┘
@@ -1213,240 +1366,129 @@ Show users their unique reading personality through beautiful data visualization
 
 ### Settings Flow
 
-```
-Profile Screen
-     │
-     ├─► Tap "Edit Profile" ──► EditProfileScreen
-     │                          - Name, email, avatar
-     │                          - Save button
-     │
-     ├─► Tap "Notifications" ──► NotificationsScreen
-     │                          - Toggle categories
-     │                          - Post-MVP
-     │
-     ├─► Tap "Theme" ──────────► ThemeMenu
-     │                          - Light
-     │                          - Dark
-     │                          - System
-     │
-     ├─► Tap "Privacy" ────────► PrivacyScreen
-     │                          - Data export
-     │                          - Delete account
-     │
-     ├─► Tap "About" ──────────► AboutScreen
-     │                          - Version
-     │                          - Credits
-     │                          - Links
-     │
-     └─► Tap "Log Out" ────────► Confirmation dialog
-                                 │
-                             ┌───┴────┐
-                             │Confirm?│
-                             └─┬────┬─┘
-                               │Yes │No
-                               ▼    ▼
-                          [Clear token]  [Dismiss]
-                          [Navigate to
-                           Welcome]
-```
+*[Same as v1.0 with added Content Preference option]*
 
 ---
 
 ## 🎬 Screen States
 
-### Universal State Types
-
-Every screen has 4 potential states:
-
-```
-┌─────────────────┐
-│  Loading  🔄    │  Data being fetched
-├─────────────────┤
-│  Success  ✅    │  Data loaded, ready
-├─────────────────┤
-│  Error   ⚠️     │  Something failed
-├─────────────────┤
-│  Empty   📭     │  Loaded but no data
-└─────────────────┘
-```
-
-### State Transitions
-
-```
-     [Enter Screen]
-           │
-           ▼
-       [Loading]
-           │
-      ┌────┴────┐
-      │         │
-      ▼         ▼
-   [Success] [Error]
-      │         │
-      │         ├─► [Retry] → Loading
-      │         │
-      ▼         └─► [Back]
-   [Empty?]
-      │
-   ┌──┴──┐
-   │ Yes │
-   ▼
-[Empty state]
-```
+*[Unchanged from v1.0 — same 4 states: Loading, Success, Error, Empty]*
 
 ---
 
 ## ⚠️ Error Handling Flows
 
-### Error Types & Responses
+### Error Types & Responses (Updated v2.0)
 
 | Error Type | Detection | User Sees | Action |
 |------------|-----------|-----------|--------|
 | **Network offline** | fetch fails | Offline banner | Auto-retry when online |
 | **API timeout** | 30s timeout | "Taking longer than expected" | Retry button |
 | **401 Unauthorized** | Token invalid | Silent redirect to Login | Auto-logout |
-| **403 Forbidden** | Permission denied | "You don't have access" | Back button |
-| **404 Not Found** | Resource missing | "Book not found" | Back button |
+| **404 Not Found** | Resource missing | "Content not found" | Back button |
 | **500 Server Error** | Backend crash | "Something went wrong" | Retry button |
-| **Rate limit (429)** | Too many requests | "Slow down!" | Countdown timer |
+| **Rate limit (429)** | Too many requests | "Slow down!" | Countdown |
+| **EPUB fetch failed** 🆕 | Timeout on IA | "Cannot load book" | Retry / Skip |
+| **Comic image failed** 🆕 | Image load error | "Cannot load page" | Retry / Next page |
+| **Collection API failed** 🆕 | ML error | Show fallback popular row | Silent degradation |
 
-### Global Error Handling
-
-```
-API Response
-     │
-     ▼
-[HTTP status check]
-     │
-  ┌──┴──┐
-  │2xx? │
-  └┬───┬┘
-   │Yes│No
-   │   ▼
-   │ [Error type?]
-   │   │
-   │   ├─ 401 ─► Logout + Redirect
-   │   ├─ 429 ─► Show cooldown UI
-   │   ├─ 5xx ─► Show generic error + retry
-   │   └─ Other ─► Show specific message
-   ▼
-[Success handler]
-```
-
-### Error UI Component
+### Free Reading Error Handling
 
 ```
-┌────────────────────────┐
-│                        │
-│         😕            │  Sad bee illustration
-│                        │
-│   Oops! Something      │
-│   went wrong.          │
-│                        │
-│   [Error message]      │
-│                        │
-│  ┌──────────────────┐  │
-│  │     Try Again    │  │  Primary action
-│  └──────────────────┘  │
-│                        │
-│         Go Back        │  Secondary action
-│                        │
-└────────────────────────┘
+User taps "Free Read"
+         │
+         ▼
+    [Fetch link]
+         │
+    ┌────┴────┐
+    │Success? │
+    └─┬─────┬─┘
+      │Yes  │No
+      │     ▼
+      │  [Toast: "Content temporarily unavailable"]
+      │  [Stay on DetailScreen]
+      │
+      ▼
+    [Load reader]
+         │
+    ┌────┴────┐
+    │Loaded?  │
+    └─┬─────┬─┘
+      │Yes  │No (EPUB fails)
+      │     ▼
+      │  [Error screen with Retry button]
+      │  [Back button visible]
+      ▼
+    [User reads]
+         │
+    ┌────┴────┐
+    │Page     │
+    │loads?   │
+    └─┬─────┬─┘
+      │Yes  │No (Comics page fails)
+      │     ▼
+      │  [Show "Loading..." with skip option]
+      │  [Auto-retry once]
+      ▼
+    [Continue reading]
 ```
 
 ---
 
 ## 📭 Empty States
 
-### When Empty States Appear
+### When Empty States Appear (Updated v2.0)
 
 | Screen | Empty Condition | CTA |
 |--------|-----------------|-----|
-| **Home** | No recommendations yet | "Rate books to get started" |
-| **Search** | No results for query | "Try different keywords" |
-| **Library (Want)** | No books added | "Explore recommendations" |
-| **Library (Reading)** | Not reading anything | "Move a book from Want to Read" |
-| **Library (Read)** | Haven't finished any | "Rate books you've read" |
-| **Insights** | < 10 books rated | "Rate 10 books to unlock" |
-| **Ratings history** | No ratings yet | "Start rating books" |
+| **Home** | No collections yet (new user) | "Rate 5 items to unlock personalized" |
+| **Search** | No results | "Try different keywords" |
+| **Library (Books)** | No books | "Explore books" |
+| **Library (Comics)** 🆕 | No comics | "Explore comics" |
+| **Library (Any status)** | Empty status tab | Contextual CTA |
+| **Insights** | < 10 rated items | "Rate 10 items to unlock" |
+| **Continue Reading** 🆕 | No reading in progress | Row hidden entirely |
 
-### Empty State Template
-
-```
-┌────────────────────────┐
-│                        │
-│         🐝             │  Illustration
-│                        │
-│   [Contextual title]   │  Empty message
-│                        │
-│   [Helpful subtitle]   │  Explanation
-│                        │
-│  ┌──────────────────┐  │
-│  │  [Primary CTA]   │  │  Action button
-│  └──────────────────┘  │
-│                        │
-└────────────────────────┘
-```
+*[Empty state template unchanged from v1.0]*
 
 ---
 
 ## 🔄 Loading States
 
-### Loading Patterns
+*[Unchanged from v1.0 — same 5 patterns]*
 
-**Pattern 1: Full-Screen Loader**
-- Used for: Initial screen loads, splash
-- UI: Centered spinner + Kitabee logo
+### Additional v2.0 Loading States
 
-**Pattern 2: Skeleton Screens**
-- Used for: List/grid content
-- UI: Grey placeholder shapes matching final layout
+**Netflix Home Loading:**
+- Show skeleton rows (3-4 skeleton collection rows)
+- Each skeleton = title placeholder + card placeholders
 - Shimmer animation
 
-**Pattern 3: Inline Loader**
-- Used for: Button actions, form submissions
-- UI: Small spinner replacing button text
-
-**Pattern 4: Progress Bar**
-- Used for: Multi-step processes (uploads)
-- UI: Determinate progress bar
-
-**Pattern 5: Optimistic UI**
-- Used for: Rating a book, adding to library
-- UI: Instant feedback, sync in background
+**Reader Loading:**
+- EPUB: Progress bar as EPUB.js loads
+- Comics: Skeleton box where image will render + spinner
 
 ---
 
 ## ✅ Success States
 
-### Success Feedback Types
+*[Unchanged from v1.0]*
 
-| Action | Feedback Type | Duration |
-|--------|---------------|----------|
-| **Rate a book** | Toast + confetti | 2s |
-| **Add to library** | Toast + haptic | 1.5s |
-| **Save profile** | Toast | 2s |
-| **Login** | Screen transition | Immediate |
-| **Register** | Welcome message | Persistent |
+### v2.0 Additions
 
-### Success Toast Template
+**Reading Progress Saved:**
+- Silent (no toast) — auto-save every 5 seconds
+- Toast only if manually saved via menu
 
-```
-┌──────────────────────────────┐
-│  ✅  Book rated!             │
-│      "Sapiens" - 5 stars     │
-└──────────────────────────────┘
-
-Position: Top of screen
-Duration: 2 seconds
-Animation: Slide down + fade
-```
+**Free Book Downloaded:**
+- Toast: "Ready to read!"
+- Immediate reader open
 
 ---
 
 ## 🌐 Cross-Platform Considerations
 
-### Platform-Specific Behaviors
+### Platform-Specific Behaviors (Updated v2.0)
 
 | Feature | Web | iOS | Android |
 |---------|-----|-----|---------|
@@ -1454,46 +1496,48 @@ Animation: Slide down + fade
 | **Pull to refresh** | ❌ | ✅ | ✅ |
 | **Haptic feedback** | ❌ | ✅ | ✅ (limited) |
 | **Share sheet** | Web Share API | Native | Native |
-| **Deep linking** | URLs | Universal Links | App Links |
-| **Storage** | localStorage | AsyncStorage | AsyncStorage |
-| **Modals** | Overlay | Bottom sheet | Bottom sheet |
-| **Keyboard handling** | Auto | KeyboardAvoiding | KeyboardAvoiding |
+| **EPUB Reader** 🆕 | iframe with EPUB.js | WebView | WebView |
+| **Comics Reader** 🆕 | HTML image swipe | FlatList | FlatList |
+| **Full-screen reading** 🆕 | Fullscreen API | Auto | Auto |
+| **Pinch to zoom** 🆕 | CSS transform | Gesture | Gesture |
 
 ### Responsive Breakpoints
 
 ```
-Mobile:   0 - 767px       (single column)
-Tablet:   768 - 1023px    (two columns)
-Desktop:  1024px+          (max-width: 1200px, centered)
+Mobile:   0 - 767px       (single column, collection rows scroll horizontally)
+Tablet:   768 - 1023px    (2-column grid in library, larger cards)
+Desktop:  1024px+         (3-4 cards visible in each row, max-width 1400px)
 ```
 
 ---
 
 ## ♿ Accessibility Flows
 
-### Screen Reader Support
+### Screen Reader Support (Updated v2.0)
 
 **Every interactive element has:**
-- Accessibility label
-- Accessibility hint (if action unclear)
+- Accessibility label (e.g. "Book: Dune by Frank Herbert, rated 4.5 stars")
+- Accessibility hint (e.g. "Double tap to view details")
 - Accessibility role (button, link, etc.)
 
-**Example:**
-```typescript
-<TouchableOpacity
-  accessibilityLabel="Rate this book"
-  accessibilityHint="Opens rating modal"
-  accessibilityRole="button"
->
-```
+**Collection rows:**
+- Row title read as heading
+- "Horizontally scrollable" hint
+- Each card gets full context
 
-### Keyboard Navigation (Web)
+**Reader screens:**
+- Page number announced on turn
+- Progress percentage available
+- EPUB text fully accessible via screen reader
+
+### Keyboard Navigation (Web) — Updated v2.0
 
 - **Tab** — Move focus forward
 - **Shift+Tab** — Move focus backward
 - **Enter/Space** — Activate button
-- **Esc** — Close modal
-- **Arrow keys** — Navigate lists
+- **Esc** — Close modal / exit reader
+- **Arrow Left/Right** — Navigate pages in reader 🆕
+- **Arrow Up/Down** — Scroll home screen 🆕
 
 ### Color Contrast
 
@@ -1501,44 +1545,30 @@ All text meets WCAG AA:
 - Normal text: 4.5:1 ratio
 - Large text: 3:1 ratio
 - Interactive elements: 3:1 ratio
-
----
-
-## 📊 Analytics Events
-
-### Events to Track (Post-MVP)
-
-| Event | Trigger | Data |
-|-------|---------|------|
-| **app_open** | App launched | user_id, timestamp |
-| **screen_view** | Screen displayed | screen_name |
-| **book_view** | Book details opened | book_id, source |
-| **search** | Search executed | query, results_count |
-| **rating_submitted** | Book rated | book_id, rating |
-| **library_add** | Book added to library | book_id, status |
-| **recommendation_click** | Rec tapped | book_id, model_type, position |
-| **onboarding_complete** | Setup finished | duration, books_rated |
+- Free reading badge: high contrast yellow on cover overlay
 
 ---
 
 ## 📎 Appendix
 
 ### Related Documents
-- [PRD.md](./PRD.md) — Product requirements
-- [TECHSPEC.md](./TECHSPEC.md) — Technical specification
 
-### Design Assets (Coming Soon)
-- Figma mockups: `figma.com/kitabee-designs`
-- Brand guidelines: `docs/BRAND.md`
+- [PRD.md](./PRD.md) v2.0 — Product requirements
+- [TECHSPEC.md](./TECHSPEC.md) v2.0 — Technical specification
+- [SCHEMA.md](./SCHEMA.md) v2.0 — Database schema
+- [IMPLEMENTATIONPLAN.md](./IMPLEMENTATIONPLAN.md) v2.0 — Daily plan
 
 ### Change Log
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | [Today] | [Your Name] | Initial app flow document |
+| 1.0 | [Original] | [Your Name] | Initial app flow document |
+| 2.0 | [Today] | [Your Name] | Redesigned home as Netflix-style collection rows. Added ContentChoice onboarding step. Added FullCollectionScreen. Added SeriesOrderSection to detail. Added EPUBReaderScreen and ComicsReaderScreen. Updated Library for books + comics. Updated Search with content type tabs. Updated Insights for books + comics. 21 screens total (was 18). 10 flows (was 8). |
 
 ---
 
 **End of App Flow Document** 🔄
 
-*"Every tap. Every screen. Every state. Documented."*
+*"Every tap. Every screen. Every collection row. Every page turned. Documented."*
+
+---

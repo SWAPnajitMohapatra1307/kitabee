@@ -1,10 +1,12 @@
+---
+
 # 🔧 Kitabee — Technical Specification
 
-> **Document Version:** 1.0  
-> **Last Updated:** [Today's Date]  
-> **Author:** [Your Name]  
-> **Status:** 🟢 Approved for Implementation  
-> **Related Docs:** [PRD.md](./PRD.md)
+> **Document Version:** 2.0
+> **Last Updated:** [Today's Date]
+> **Author:** [Your Name]
+> **Status:** 🟢 Approved for Implementation
+> **Related Docs:** [PRD.md](./PRD.md) | [SCHEMA.md](./SCHEMA.md) | [IMPLEMENTATIONPLAN.md](./IMPLEMENTATIONPLAN.md)
 
 ---
 
@@ -36,33 +38,40 @@
 ## 🎯 Overview
 
 ### Purpose
-This document specifies the complete technical implementation of Kitabee — an AI-powered book discovery platform. It defines technology choices, architecture patterns, and engineering standards.
+This document specifies the complete technical implementation of Kitabee — an AI-powered books and comics discovery platform with Netflix-style themed collections, series reading order guidance, and free public domain reading.
+
+### What Changed in v2.0
+- Added **Comics** as first-class content type (Comic Vine API integration)
+- Added **Internet Archive** integration for free public domain reading
+- Restructured **ML Layer** into 5 focused modules (Vectorizer, Collection Engine, Series Intelligence, Personalizer, Neural)
+- Added **Collections API** for Netflix-style home screen
+- Added **Series Order API** for reading order guidance
+- Added **Reading Progress API** for in-app reading tracking
+- Added **EPUB reader + Comics reader** frontend screens
+- Updated deployment for ML model volume persistence
 
 ### Scope
 - ✅ MVP technical requirements (5-week timeline)
 - ✅ Production deployment specifications
-- ✅ Development environment setup
-- ❌ Post-MVP scaling considerations (see [Future Roadmap](#future-roadmap))
-
-### Target Audience
-- Solo developer (project owner)
-- Recruiters evaluating engineering depth
-- Future contributors (if open-sourced)
+- ✅ Books + Comics unified architecture
+- ✅ Free reading via Internet Archive
 
 ### Guiding Principles
 
 1. **🎯 Pragmatism Over Perfection** — Ship in 5 weeks, iterate later
 2. **📚 Learn by Building** — Choose tech that teaches valuable skills
-3. **💰 Zero Budget** — Free tiers only (AWS free tier, open-source)
+3. **💰 Zero Budget** — Free tiers only
 4. **🔒 Security First** — No shortcuts on auth or data protection
 5. **⚡ Performance Matters** — p95 latency < 300ms for API calls
 6. **📖 Documentation Driven** — Every decision documented
+7. **🎬 UX Familiarity** — Netflix-style rows users already understand (New v2.0)
+8. **⚖️ Legal Compliance** — Only public domain content for free reading (New v2.0)
 
 ---
 
 ## 🏗️ System Architecture
 
-### High-Level Architecture Diagram
+### High-Level Architecture Diagram (Updated v2.0)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -74,12 +83,14 @@ This document specifies the complete technical implementation of Kitabee — an 
 │  │                  │        │                  │           │
 │  │  React Native    │        │  React Native    │           │
 │  │  Web Bundle      │        │  Bundle          │           │
+│  │  + EPUB Reader   │        │  + EPUB Reader   │           │
+│  │  + Comics Reader │        │  + Comics Reader │           │
 │  └────────┬─────────┘        └────────┬─────────┘           │
 └───────────┼──────────────────────────┼──────────────────────┘
             │                          │
             │  HTTPS/WSS               │  HTTPS
-            │                          │
-            ▼                          ▼
+            └──────────────┬───────────┘
+                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    LOAD BALANCER                            │
 │              (Nginx Reverse Proxy)                          │
@@ -100,36 +111,69 @@ This document specifies the complete technical implementation of Kitabee — an 
 │  │  └────────────────┘  └────────────────────┘      │       │
 │  │                                                  │       │
 │  │  ┌────────────────┐  ┌────────────────────┐      │       │
-│  │  │ Ratings Module │  │ Recommendations    │      │       │
-│  │  │ (CRUD)         │  │ Module (ML)        │      │       │
+│  │  │ Comics Module  │  │ Collections Module │      │       │
+│  │  │ 🆕 v2.0        │  │ 🆕 v2.0            │      │       │
+│  │  │ (Search/Detail)│  │ (Netflix rows)     │      │       │
 │  │  └────────────────┘  └────────────────────┘      │       │
 │  │                                                  │       │
 │  │  ┌────────────────┐  ┌────────────────────┐      │       │
-│  │  │ Users Module   │  │ Insights Module    │      │       │
-│  │  │ (Profile)      │  │ (Analytics)        │      │       │
+│  │  │ Series Module  │  │ Reading Progress   │      │       │
+│  │  │ 🆕 v2.0        │  │ 🆕 v2.0            │      │       │
+│  │  │ (Order guide)  │  │ (Free reading)     │      │       │
+│  │  └────────────────┘  └────────────────────┘      │       │
+│  │                                                  │       │
+│  │  ┌────────────────┐  ┌────────────────────┐      │       │
+│  │  │ Ratings Module │  │ Library Module     │      │       │
+│  │  │ (books+comics) │  │ (books+comics)     │      │       │
+│  │  └────────────────┘  └────────────────────┘      │       │
+│  │                                                  │       │
+│  │  ┌────────────────┐  ┌────────────────────┐      │       │
+│  │  │ Users Module   │  │ Preferences Module │      │       │
+│  │  │ (Profile)      │  │ (books/comics/both)│      │       │
 │  │  └────────────────┘  └────────────────────┘      │       │
 │  └──────────────────────────────────────────────────┘       │
 └──────┬─────────────────────────────────────┬────────────────┘
        │                                     │
        ▼                                     ▼
-┌──────────────────┐              ┌──────────────────────┐
-│  DATA LAYER      │              │  ML LAYER            │
-│                  │              │                      │
-│  ┌────────────┐  │              │  ┌───────────────┐   │
-│  │ PostgreSQL │  │              │  │ scikit-learn  │   │
-│  │ (Docker)   │  │              │  │ models        │   │
-│  │ Port 5432  │  │              │  └───────────────┘   │
-│  └────────────┘  │              │                      │
-│                  │              │  ┌───────────────┐   │
-│  ┌────────────┐  │              │  │ Keras Neural  │   │
-│  │ Redis      │  │              │  │ Recommender   │   │
-│  │ (Docker)   │  │              │  └───────────────┘   │
-│  │ Port 6379  │  │              │                      │
-│  └────────────┘  │              │  ┌───────────────┐   │
-└──────────────────┘              │  │ NLTK/TextBlob │   │
-                                  │  │ (NLP)         │   │
-                                  │  └───────────────┘   │
-                                  └──────────────────────┘
+┌──────────────────┐              ┌──────────────────────────┐
+│  DATA LAYER      │              │  ML LAYER (5 Modules)    │
+│                  │              │                          │
+│  ┌────────────┐  │              │  ┌───────────────────┐   │
+│  │ PostgreSQL │  │              │  │ 1. Vectorizer     │   │
+│  │ 14 tables  │  │              │  │    TF-IDF         │   │
+│  │ (books+    │  │              │  │    (Foundation)   │   │
+│  │  comics+   │  │              │  └───────────────────┘   │
+│  │  collections│ │              │                          │
+│  │  +series+  │  │              │  ┌───────────────────┐   │
+│  │  reading)  │  │              │  │ 2. Collection     │   │
+│  └────────────┘  │              │  │    Engine         │   │
+│                  │              │  │    KMeans + Mood  │   │
+│  ┌────────────┐  │              │  │    + Titles       │   │
+│  │ Redis      │  │              │  │  🆕 v2.0          │   │
+│  │ Cache      │  │              │  └───────────────────┘   │
+│  └────────────┘  │              │                          │
+└──────────────────┘              │  ┌───────────────────┐   │
+                                  │  │ 3. Series         │   │
+                                  │  │    Intelligence   │   │
+                                  │  │    NLP + Metadata │   │
+                                  │  │  🆕 v2.0          │   │
+                                  │  └───────────────────┘   │
+                                  │                          │
+                                  │  ┌───────────────────┐   │
+                                  │  │ 4. Personalizer   │   │
+                                  │  │    KNN Collab     │   │
+                                  │  └───────────────────┘   │
+                                  │                          │
+                                  │  ┌───────────────────┐   │
+                                  │  │ 5. Neural         │   │
+                                  │  │    Keras CF       │   │
+                                  │  └───────────────────┘   │
+                                  │                          │
+                                  │  ┌───────────────────┐   │
+                                  │  │ Hybrid Engine     │   │
+                                  │  │ (Weighted mix)    │   │
+                                  │  └───────────────────┘   │
+                                  └──────────────────────────┘
                                             │
                                             ▼
                         ┌────────────────────────────────────┐
@@ -137,17 +181,24 @@ This document specifies the complete technical implementation of Kitabee — an 
                         │                                    │
                         │  ┌─────────────────────────────┐   │
                         │  │ Google Books API            │   │
-                        │  │ (Primary - 100K req/day)    │   │
+                        │  │ (Books primary)             │   │
                         │  └─────────────────────────────┘   │
                         │                                    │
                         │  ┌─────────────────────────────┐   │
-                        │  │ Open Library API            │   │
-                        │  │ (Fallback - Unlimited)      │   │
+                        │  │ Comic Vine API              │   │
+                        │  │ (Comics metadata)           │   │
+                        │  │ 🆕 v2.0                     │   │
+                        │  └─────────────────────────────┘   │
+                        │                                    │
+                        │  ┌─────────────────────────────┐   │
+                        │  │ Internet Archive API        │   │
+                        │  │ (Free books + comics)       │   │
+                        │  │ 🆕 v2.0                     │   │
                         │  └─────────────────────────────┘   │
                         │                                    │
                         │  ┌─────────────────────────────┐   │
                         │  │ NYT Books API               │   │
-                        │  │ (Bestsellers - 500/day)     │   │
+                        │  │ (Trending)                  │   │
                         │  └─────────────────────────────┘   │
                         └────────────────────────────────────┘
 ```
@@ -163,8 +214,11 @@ This document specifies the complete technical implementation of Kitabee — an 
 | **Circuit Breaker** | External API calls | Resilience |
 | **Retry with Backoff** | HTTP client (tenacity) | Handle transient failures |
 | **Async/Await** | Backend I/O operations | Concurrent request handling |
+| **Polymorphic Content** 🆕 | recommendations, reading_progress | Books + Comics unified |
+| **Denormalized JSON** 🆕 | collections.items_json | Fast Netflix row rendering |
+| **Content-Type Symmetry** 🆕 | books/comics parallel tables | ML content-agnostic |
 | **Component-Based** | React Native frontend | Reusable UI |
-| **Context API** | Frontend state | Avoid prop drilling |
+| **WebView Embedding** 🆕 | EPUB reader | Reuse mature EPUB libraries |
 
 ---
 
@@ -176,26 +230,27 @@ This document specifies the complete technical implementation of Kitabee — an 
 |-------|-----------|---------|---------|
 | **Frontend Framework** | React Native + Expo | SDK 51+ | Cross-platform UI |
 | **Frontend Language** | TypeScript | 5.3+ | Type-safe development |
-| **Web Bundler** | Metro / Webpack (Expo) | Built-in | Bundle for web export |
-| **Mobile Distribution** | Expo Go | Latest | Bypass app stores |
 | **State Management** | Zustand | 5.0+ | Global state |
 | **Navigation** | React Navigation | 7.x | Screen routing |
 | **HTTP Client (FE)** | Axios | 1.7+ | API calls |
+| **EPUB Reader** 🆕 | react-native-webview | Latest | Embed EPUB.js for reading |
+| **Image Reader** 🆕 | react-native-image-viewer | Latest | Comics page viewer |
 | **Backend Framework** | FastAPI | 0.115+ | REST API |
 | **Backend Language** | Python | 3.11 | ML ecosystem |
 | **ASGI Server** | Uvicorn | 0.32+ | Async server |
 | **HTTP Client (BE)** | httpx | 0.27+ | Async external calls |
+| **Retry Library** | tenacity | 9.0+ | External API resilience |
 | **ORM** | SQLAlchemy | 2.0+ | Database abstraction |
 | **Validation** | Pydantic | 2.9+ | Data validation |
 | **Auth** | python-jose (JWT) | 3.3+ | Token generation |
-| **Password Hashing** | Passlib (bcrypt) | 1.7+ | Secure storage |
+| **Password Hashing** | Passlib (bcrypt 4.0.1) | 1.7+ | Secure storage |
 | **Primary Database** | PostgreSQL | 16 | Relational data |
 | **Cache** | Redis | 7 | Fast key-value store |
 | **DB Migrations** | Alembic | 1.13+ | Schema versioning |
-| **ML - Classical** | scikit-learn | 1.5+ | TF-IDF, KNN, KMeans |
+| **ML - Classical** | scikit-learn | 1.5+ | TF-IDF, KMeans, KNN |
 | **ML - Deep Learning** | Keras/TensorFlow | 3.6+ / 2.18+ | Neural recommender |
-| **NLP** | NLTK + TextBlob | 3.9+ / 0.18+ | Sentiment analysis |
-| **Data Processing** | Pandas + NumPy | 2.2+ / 1.26+ | Data manipulation |
+| **NLP** | NLTK + TextBlob | 3.9+ / 0.18+ | Mood + sentiment |
+| **Data Processing** | Pandas + NumPy | 2.2+ / 1.26+ | ML data pipelines |
 | **Testing (BE)** | pytest | 8.3+ | Unit/integration tests |
 | **Testing (FE)** | Jest + RN Testing Library | Latest | Component tests |
 | **Containerization** | Docker + Compose | 27+ / v2+ | Environment consistency |
@@ -204,32 +259,30 @@ This document specifies the complete technical implementation of Kitabee — an 
 | **Cloud (Frontend Web)** | Vercel | Free tier | Web deployment |
 | **CI/CD** | GitHub Actions | Latest | Automation |
 | **Version Control** | Git + GitHub | Latest | Source control |
-| **Package Managers** | pip / npm | Latest | Dependencies |
-| **Code Formatter (BE)** | Black + isort | 24.10+ / 5.13+ | Python formatting |
-| **Code Formatter (FE)** | Prettier | Latest | JS/TS formatting |
-| **Linter (BE)** | flake8 | 7.1+ | Python linting |
-| **Linter (FE)** | ESLint | Latest | JS/TS linting |
-| **API Testing** | Thunder Client / Postman | Latest | Manual testing |
-| **DB Client** | pgAdmin / DBeaver | Latest | Database GUI |
 
 ### Why NOT These Alternatives?
 
-| Considered | Rejected Because |
-|------------|------------------|
-| **Django REST** (vs FastAPI) | Overhead for our size; less async-native |
-| **Flask** (vs FastAPI) | No async, no auto-docs, needs many extensions |
-| **Express (Node)** (vs FastAPI) | Would require context-switching from Python ML |
-| **MongoDB** (vs PostgreSQL) | Our data is highly relational; ACID needed |
-| **Firebase** (vs custom backend) | Vendor lock-in; hides valuable learning |
-| **Bare React Native** (vs Expo) | Requires Xcode/Android Studio; complex setup |
-| **Flutter** (vs React Native) | Less ecosystem for ML backend integration |
-| **Redux** (vs Zustand) | Boilerplate-heavy for our size |
-| **Native Android/iOS** | 3x development time; not portfolio priority |
-| **Heroku** (vs AWS) | Less industry-relevant for jobs |
-| **GCP/Azure** (vs AWS) | AWS has larger job market share |
-| **MySQL** (vs PostgreSQL) | Postgres has better JSON support + performance |
-| **Memcached** (vs Redis) | Redis has more features (pub/sub, structures) |
-| **Poetry** (vs pip) | Simpler workflow with venv + pip for MVP |
+*[Unchanged from v1.0]*
+
+### New v2.0 Choices Explained
+
+**Comic Vine over other comics APIs:**
+- Best free comics database
+- No paid tier required
+- Rich metadata (characters, publishers, issues)
+- 200 req/hour is enough with caching
+
+**Internet Archive over Open Library CDL:**
+- Public domain content is unrestricted (no borrowing system)
+- Provides direct EPUB/PDF/image URLs
+- No user account required on their side
+- Same organization as Open Library
+
+**react-native-webview over native EPUB reader:**
+- Mature EPUB.js library works inside WebView
+- Cross-platform (iOS + Android + web) with same code
+- Avoids native module complexity
+- Progress tracking via postMessage bridge
 
 ---
 
@@ -237,173 +290,216 @@ This document specifies the complete technical implementation of Kitabee — an 
 
 ### Framework: React Native + Expo (Managed Workflow)
 
-**Rationale:**
-- ✅ Single codebase for iOS, Android, Web
-- ✅ Expo Go enables QR-code distribution (no app store)
-- ✅ TypeScript support out-of-box
-- ✅ Rich ecosystem (React Navigation, Reanimated)
-- ✅ Web export via `npx expo export:web`
+*[Rationale unchanged from v1.0]*
 
-### Project Structure
+### Project Structure (Updated v2.0)
 
 ```
 mobile/
 ├── src/
-│   ├── screens/              # Top-level screens
-│   │   ├── OnboardingScreen.tsx
-│   │   ├── HomeScreen.tsx
-│   │   ├── SearchScreen.tsx
-│   │   ├── BookDetailsScreen.tsx
-│   │   ├── LibraryScreen.tsx
-│   │   ├── InsightsScreen.tsx
-│   │   └── ProfileScreen.tsx
+│   ├── screens/
+│   │   ├── auth/
+│   │   │   ├── WelcomeScreen.tsx
+│   │   │   ├── LoginScreen.tsx
+│   │   │   └── RegisterScreen.tsx
+│   │   ├── onboarding/
+│   │   │   ├── ContentChoiceScreen.tsx  🆕 books/comics/both
+│   │   │   ├── RateBooksScreen.tsx
+│   │   │   └── GenreSelectScreen.tsx
+│   │   ├── main/
+│   │   │   ├── HomeScreen.tsx           🔄 Netflix-style rows
+│   │   │   ├── SearchScreen.tsx         🔄 Books + Comics tabs
+│   │   │   ├── LibraryScreen.tsx        🔄 Books + Comics tabs
+│   │   │   ├── ProfileScreen.tsx
+│   │   │   └── InsightsScreen.tsx
+│   │   ├── detail/
+│   │   │   ├── DetailScreen.tsx         🔄 Works for books + comics
+│   │   │   └── FullCollectionScreen.tsx 🆕 Full collection view
+│   │   ├── reader/                      🆕 v2.0
+│   │   │   ├── EPUBReaderScreen.tsx     🆕 EPUB WebView reader
+│   │   │   └── ComicsReaderScreen.tsx   🆕 Image-based reader
+│   │   └── settings/
+│   │       └── SettingsScreen.tsx
 │   │
-│   ├── components/           # Reusable UI components
-│   │   ├── common/          # Buttons, Cards, Inputs
-│   │   ├── books/           # BookCard, BookGrid, BookList
-│   │   ├── ratings/         # StarRating, ReviewInput
-│   │   └── insights/        # Charts, DNACard
+│   ├── components/
+│   │   ├── common/
+│   │   ├── content/                      🆕 v2.0 (books + comics)
+│   │   │   ├── ContentCard.tsx           🆕 Card for books + comics
+│   │   │   ├── CollectionRow.tsx         🆕 Netflix-style row
+│   │   │   ├── SearchResultCard.tsx      🆕
+│   │   │   └── SeriesOrderSection.tsx    🆕 Series reading order
+│   │   ├── ratings/
+│   │   │   └── RatingModal.tsx
+│   │   └── insights/
 │   │
-│   ├── navigation/          # React Navigation setup
-│   │   ├── AppNavigator.tsx
-│   │   └── TabNavigator.tsx
+│   ├── navigation/
+│   │   ├── RootNavigator.tsx
+│   │   ├── AuthStack.tsx
+│   │   ├── OnboardingStack.tsx
+│   │   ├── MainTabs.tsx
+│   │   └── ReaderStack.tsx               🆕 v2.0
 │   │
-│   ├── context/             # Global state (Context API)
-│   │   ├── AuthContext.tsx
-│   │   ├── ThemeContext.tsx
-│   │   └── LibraryContext.tsx
-│   │
-│   ├── services/            # API clients
-│   │   ├── api.ts           # Axios instance
+│   ├── services/
+│   │   ├── api.ts
 │   │   ├── authService.ts
 │   │   ├── bookService.ts
+│   │   ├── comicService.ts               🆕 v2.0
+│   │   ├── collectionService.ts          🆕 v2.0
+│   │   ├── seriesService.ts              🆕 v2.0
+│   │   ├── readingProgressService.ts     🆕 v2.0
 │   │   ├── ratingService.ts
-│   │   └── recommendationService.ts
+│   │   └── libraryService.ts
 │   │
-│   ├── hooks/               # Custom React hooks
-│   │   ├── useAuth.ts
-│   │   ├── useBooks.ts
-│   │   └── useDebounce.ts
-│   │
-│   ├── store/               # Zustand stores
+│   ├── stores/
 │   │   ├── userStore.ts
-│   │   └── libraryStore.ts
+│   │   ├── libraryStore.ts
+│   │   └── readingStore.ts               🆕 v2.0
 │   │
-│   ├── types/               # TypeScript definitions
+│   ├── types/
 │   │   ├── book.ts
+│   │   ├── comic.ts                      🆕 v2.0
+│   │   ├── collection.ts                 🆕 v2.0
+│   │   ├── series.ts                     🆕 v2.0
+│   │   ├── reading.ts                    🆕 v2.0
 │   │   ├── user.ts
 │   │   └── api.ts
 │   │
-│   ├── utils/               # Helper functions
-│   │   ├── formatters.ts
-│   │   ├── validators.ts
-│   │   └── constants.ts
-│   │
-│   └── theme/               # Design system
+│   └── theme/
 │       ├── colors.ts
 │       ├── typography.ts
 │       └── spacing.ts
-│
-├── assets/                  # Images, fonts, animations
-├── App.tsx                  # Root component
-├── app.json                 # Expo config
-├── tsconfig.json            # TypeScript config
-└── package.json
 ```
 
-### Screen Architecture
+### Screen Architecture (Updated v2.0)
 
 | Screen | Purpose | Key Features |
 |--------|---------|--------------|
-| **OnboardingScreen** | New user welcome | Login/Signup, tutorial |
-| **HomeScreen** | Discovery hub | Recommendations, trending |
-| **SearchScreen** | Book search | Real-time search, filters |
-| **BookDetailsScreen** | Book info | Full metadata, similar books |
-| **LibraryScreen** | User's books | Tabs: Want to Read, Reading, Read |
-| **InsightsScreen** | Reading DNA | Charts, stats, personality |
-| **ProfileScreen** | User settings | Theme, logout, account |
+| **WelcomeScreen** | New user welcome | Get started CTA |
+| **LoginScreen** | User login | Email + password |
+| **RegisterScreen** | Account creation | Email + password + name |
+| **ContentChoiceScreen** 🆕 | Onboarding: what do you love? | Books / Comics / Both |
+| **RateBooksScreen** | Onboarding: rate 5 items | Star selector on popular items |
+| **GenreSelectScreen** | Onboarding: pick genres | Multi-select chips |
+| **HomeScreen** 🔄 | Netflix-style discovery hub | 6+ themed collection rows |
+| **SearchScreen** 🔄 | Books + Comics search | Tabs: All / Books / Comics |
+| **DetailScreen** 🔄 | Book or Comic details | Cover, description, series order, free read |
+| **FullCollectionScreen** 🆕 | See all items in a collection | Grid view |
+| **LibraryScreen** 🔄 | User's collection | Want/Reading/Read × Books/Comics/All |
+| **EPUBReaderScreen** 🆕 | Read public domain books | WebView + EPUB.js, progress tracking |
+| **ComicsReaderScreen** 🆕 | Read public domain comics | Image pages, swipe, pinch zoom |
+| **InsightsScreen** | Reading DNA | Charts, personality profile |
+| **ProfileScreen** | User settings | Avatar, stats, edit |
+| **SettingsScreen** | App settings | Theme, content preference, logout |
 
-### State Management: Zustand
+### Netflix-Style Home Screen (New v2.0)
 
-**Why Zustand?**
-- ✅ Simpler than Redux (no reducers, actions boilerplate)
-- ✅ TypeScript-friendly
-- ✅ 1KB bundle size (vs Redux's 20KB+)
-- ✅ Perfect for MVP scale
-
-**Example Store:**
-```typescript
-// stores/userStore.ts
-import { create } from 'zustand';
-
-interface UserState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
-  logout: () => void;
-}
-
-export const useUserStore = create<UserState>((set) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  login: (user, token) => set({ user, token, isAuthenticated: true }),
-  logout: () => set({ user: null, token: null, isAuthenticated: false }),
-}));
+**Layout pattern:**
+```
+┌─────────────────────────────────────┐
+│  Header: Greeting + Profile Icon    │
+│                                     │
+│  ▶ Continue Reading (if any)        │
+│    Horizontal scroll                │
+│                                     │
+│  🔥 [Personalized Row Title]        │
+│    Horizontal scroll (8-12 cards)   │
+│                                     │
+│  🌍 [Mood Row Title]                │
+│    Horizontal scroll                │
+│                                     │
+│  📖 Free to Read Right Now          │
+│    Horizontal scroll                │
+│                                     │
+│  🦸 Comics — Perfect Starting Point │
+│    Horizontal scroll                │
+│                                     │
+│  ✅ Complete Series — Start to End  │
+│    Horizontal scroll                │
+│                                     │
+│  🔥 Everyone Is Reading This        │
+│    Horizontal scroll                │
+└─────────────────────────────────────┘
 ```
 
-### Navigation: React Navigation v7
+**Key components:**
+- `<CollectionRow title="..." items={[...]} onSeeAll={...} />`
+- `<ContentCard content={book | comic} size="normal|large" />`
+- Pull-to-refresh triggers re-fetch of `/api/v1/collections`
 
-**Structure:**
-- **Auth Stack** (Login, Register, Onboarding)
-- **Main Tab Navigator** (Home, Search, Library, Insights, Profile)
-- **Modal Stack** (Book Details, Rating Modal)
+### EPUB Reader Architecture (New v2.0)
 
-### Styling Approach
+**Approach:** WebView + EPUB.js
 
-**Custom Theme Context** (inspired by industry pattern):
-```typescript
-// theme/colors.ts
-export const lightColors = {
-  primary: '#FFC93C',      // Honey Yellow
-  secondary: '#1E3A8A',    // Deep Blue
-  accent: '#10B981',       // Green
-  background: '#FFF8E7',
-  surface: '#FFFFFF',
-  textPrimary: '#1F2937',
-  textSecondary: '#6B7280',
-  border: '#E5E7EB',
-};
-
-export const darkColors = {
-  primary: '#FFD65C',
-  secondary: '#3B82F6',
-  accent: '#34D399',
-  background: '#0F172A',
-  surface: '#1E293B',
-  textPrimary: '#F9FAFB',
-  textSecondary: '#9CA3AF',
-  border: '#374151',
-};
+**Flow:**
+```
+User taps "Read Free" on book detail
+         ↓
+Navigate to EPUBReaderScreen(book_id)
+         ↓
+Fetch reading link from /api/v1/reading/{book_id}/link
+         ↓
+Backend returns Internet Archive EPUB URL
+         ↓
+WebView loads static HTML page with EPUB.js
+         ↓
+EPUB.js fetches EPUB from Internet Archive URL
+         ↓
+User reads. Progress tracked via postMessage bridge:
+         ↓
+onMessage(progress) → POST /api/v1/reading/{book_id}/progress
 ```
 
-### Fonts
+**Sample HTML (embedded in app):**
+```html
+<!DOCTYPE html>
+<html>
+<head><script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script></head>
+<body>
+  <div id="viewer"></div>
+  <script>
+    const epubUrl = window.EPUB_URL; // Injected from React Native
+    const book = ePub(epubUrl);
+    const rendition = book.renderTo("viewer", { width: "100%", height: "100%" });
+    rendition.display(window.START_CFI || undefined);
 
-**Google Fonts (via Expo):**
-- Headings: **Poppins** (400, 600, 700)
-- Body: **Inter** (400, 500, 600)
+    rendition.on("relocated", (location) => {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: "progress",
+        cfi: location.start.cfi,
+        percent: location.start.percentage * 100
+      }));
+    });
+  </script>
+</body>
+</html>
+```
 
-### Cross-Platform Considerations
+### Comics Reader Architecture (New v2.0)
 
-| Feature | Web | Mobile | Handling |
-|---------|-----|--------|----------|
-| **Storage** | localStorage | AsyncStorage | Wrapper utility |
-| **Navigation** | URL-based | Stack-based | React Navigation handles both |
-| **Fonts** | Web fonts | Expo fonts | Same package |
-| **Images** | `<img>` | `<Image>` | React Native Image works both |
-| **Icons** | @expo/vector-icons | @expo/vector-icons | Same package |
-| **Alerts** | window.alert | Alert.alert | Platform.OS check |
+**Approach:** Native FlatList with images
+
+**Flow:**
+```
+User taps "Read Free" on comic detail
+         ↓
+Navigate to ComicsReaderScreen(comic_id)
+         ↓
+Fetch image URLs from /api/v1/reading/{comic_id}/link
+         ↓
+Backend returns array of page image URLs from Internet Archive
+         ↓
+FlatList with horizontal paging renders images
+         ↓
+User swipes between pages
+         ↓
+Current page index saved to backend on exit
+```
+
+**Features:**
+- Pinch to zoom (react-native-image-viewer)
+- Page number indicator
+- Pre-load next 2 pages for smooth swiping
+- Save progress every 5 pages or on exit
 
 ---
 
@@ -411,185 +507,188 @@ export const darkColors = {
 
 ### Framework: FastAPI
 
-**Rationale:**
-- ✅ **Native async/await** (critical for external API calls)
-- ✅ **Auto-generated OpenAPI docs** (Swagger UI + ReDoc)
-- ✅ **Pydantic integration** (runtime type validation)
-- ✅ **High performance** (comparable to NodeJS/Go)
-- ✅ **Modern Python** (type hints, async)
-- ✅ **Growing job market**
+*[Rationale unchanged]*
 
-### Project Structure
+### Project Structure (Updated v2.0)
 
 ```
 backend/
 ├── src/
-│   ├── main.py                    # FastAPI app entry
-│   ├── config.py                  # Settings (Pydantic Settings)
+│   ├── main.py
+│   ├── config.py
 │   │
-│   ├── api/                       # API layer
-│   │   ├── __init__.py
-│   │   ├── deps.py               # Dependency injection
+│   ├── api/
+│   │   ├── deps.py
+│   │   ├── response.py
 │   │   └── routes/
-│   │       ├── __init__.py
-│   │       ├── auth.py           # /auth endpoints
-│   │       ├── books.py          # /books endpoints
-│   │       ├── users.py          # /users endpoints
-│   │       ├── ratings.py        # /ratings endpoints
-│   │       ├── recommendations.py # /recommendations endpoints
-│   │       └── health.py         # /health endpoint
+│   │       ├── health.py                ✅ Built
+│   │       ├── auth.py                  ✅ Built
+│   │       ├── users.py                 ✅ Built
+│   │       ├── books.py                 ✅ Built
+│   │       ├── ratings.py               ✅ Built
+│   │       ├── library.py               ✅ Built
+│   │       ├── preferences.py           ✅ Built
+│   │       ├── comics.py                🆕 v2.0
+│   │       ├── collections.py           🆕 v2.0
+│   │       ├── series.py                🆕 v2.0
+│   │       └── reading.py               🆕 v2.0
 │   │
-│   ├── services/                  # Business logic layer
+│   ├── services/
+│   │   ├── book_service.py              ✅ Built
+│   │   ├── user_service.py              ✅ Built
+│   │   ├── rating_service.py            ✅ Built
+│   │   ├── library_service.py           ✅ Built
+│   │   ├── preferences_service.py       ✅ Built
+│   │   ├── comic_service.py             🆕 v2.0
+│   │   ├── collection_service.py        🆕 v2.0
+│   │   ├── series_service.py            🆕 v2.0
+│   │   └── reading_service.py           🆕 v2.0
+│   │
+│   ├── external/
+│   │   ├── google_books.py              ✅ Built
+│   │   ├── comic_vine.py                🆕 v2.0
+│   │   ├── internet_archive.py          🆕 v2.0
+│   │   └── nyt_books.py                 🆕 (Week 3)
+│   │
+│   ├── ml/                              🆕 v2.0 (all)
 │   │   ├── __init__.py
-│   │   ├── book_service.py       # Multi-API book search
-│   │   ├── user_service.py       # User management
-│   │   ├── rating_service.py     # Rating logic
-│   │   └── recommendation_service.py # ML orchestration
+│   │   ├── vectorizer.py                🆕 TF-IDF foundation
+│   │   ├── mood_detector.py             🆕 NLP mood tags
+│   │   ├── title_templates.py           🆕 Catchy titles
+│   │   ├── collection_engine.py         🆕 KMeans + orchestration
+│   │   ├── series_detector.py           🆕 Series detection
+│   │   ├── series_builder.py            🆕 Reading order builder
+│   │   ├── collaborative.py             🆕 KNN
+│   │   ├── personalizer.py              🆕 Per-user ranking
+│   │   ├── neural.py                    🆕 Keras
+│   │   └── hybrid.py                    🆕 Weighted combination
 │   │
-│   ├── external/                  # External API clients
-│   │   ├── __init__.py
-│   │   ├── google_books.py
-│   │   ├── open_library.py
-│   │   └── nyt_books.py
+│   ├── database/
+│   │   ├── session.py                   ✅ Built
+│   │   ├── base.py                      ✅ Built
+│   │   ├── models/
+│   │   │   ├── user.py                  ✅ Built
+│   │   │   ├── book.py                  ✅ Built (updated v2.0)
+│   │   │   ├── rating.py                ✅ Built
+│   │   │   ├── library_item.py          ✅ Built
+│   │   │   ├── recommendation.py        ✅ Built (updated v2.0)
+│   │   │   ├── user_preferences.py      ✅ Built (updated v2.0)
+│   │   │   ├── search_history.py        ✅ Built (updated v2.0)
+│   │   │   ├── comic.py                 🆕 v2.0
+│   │   │   ├── comic_rating.py          🆕 v2.0
+│   │   │   ├── comic_library_item.py    🆕 v2.0
+│   │   │   ├── collection.py            🆕 v2.0
+│   │   │   ├── user_collection.py       🆕 v2.0
+│   │   │   ├── reading_progress.py      🆕 v2.0
+│   │   │   └── series_metadata.py       🆕 v2.0
+│   │   └── crud/
+│   │       ├── book.py                  ✅ Built
+│   │       ├── user.py                  ✅ Built
+│   │       ├── rating.py                ✅ Built
+│   │       ├── library.py               ✅ Built
+│   │       ├── preferences.py           ✅ Built
+│   │       ├── comic.py                 🆕 v2.0
+│   │       ├── comic_rating.py          🆕 v2.0
+│   │       ├── comic_library.py         🆕 v2.0
+│   │       ├── collection.py            🆕 v2.0
+│   │       ├── reading_progress.py      🆕 v2.0
+│   │       └── series.py                🆕 v2.0
 │   │
-│   ├── ml/                        # ML models
-│   │   ├── __init__.py
-│   │   ├── content_based.py      # TF-IDF recommender
-│   │   ├── collaborative.py      # KNN recommender
-│   │   ├── neural.py             # Keras deep model
-│   │   ├── sentiment.py          # NLTK sentiment
-│   │   ├── clustering.py         # KMeans users
-│   │   └── evaluation.py         # Model metrics
+│   ├── cache/
+│   │   ├── redis_client.py              ✅ Built
+│   │   └── decorators.py                ✅ Built
 │   │
-│   ├── database/                  # Database layer
-│   │   ├── __init__.py
-│   │   ├── session.py            # SQLAlchemy session
-│   │   ├── base.py               # Base model
-│   │   └── models/               # ORM models
-│   │       ├── user.py
-│   │       ├── book.py
-│   │       ├── rating.py
-│   │       └── library.py
+│   ├── auth/
+│   │   ├── password.py                  ✅ Built
+│   │   ├── jwt_handler.py               ✅ Built
+│   │   └── dependencies.py              ✅ Built
 │   │
-│   ├── cache/                     # Caching layer
-│   │   ├── __init__.py
-│   │   ├── redis_client.py
-│   │   └── decorators.py         # @cached decorator
+│   ├── schemas/
+│   │   ├── user.py                      ✅ Built
+│   │   ├── book.py                      ✅ Built
+│   │   ├── rating.py                    ✅ Built
+│   │   ├── library.py                   ✅ Built
+│   │   ├── preferences.py               ✅ Built
+│   │   ├── comic.py                     🆕 v2.0
+│   │   ├── collection.py                🆕 v2.0
+│   │   ├── series.py                    🆕 v2.0
+│   │   └── reading_progress.py          🆕 v2.0
 │   │
-│   ├── auth/                      # Authentication
-│   │   ├── __init__.py
-│   │   ├── jwt_handler.py
-│   │   ├── password.py           # bcrypt hashing
-│   │   └── dependencies.py       # get_current_user
-│   │
-│   ├── schemas/                   # Pydantic models
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── book.py
-│   │   ├── rating.py
-│   │   └── recommendation.py
-│   │
-│   └── utils/                     # Utilities
-│       ├── __init__.py
-│       ├── logger.py
-│       └── validators.py
+│   └── utils/
+│       └── logger.py
 │
-├── tests/                         # Test suite
-│   ├── conftest.py
-│   ├── test_auth.py
-│   ├── test_books.py
-│   └── test_recommendations.py
+├── notebooks/                            🆕 v2.0
+│   ├── 01_tfidf_vectorizer.ipynb
+│   ├── 02_collection_engine.ipynb
+│   ├── 03_series_intelligence.ipynb
+│   ├── 04_collaborative.ipynb
+│   ├── 05_neural.ipynb
+│   └── 06_evaluation.ipynb
 │
-├── notebooks/                     # ML experimentation
-│   ├── 01_data_exploration.ipynb
-│   ├── 02_content_based.ipynb
-│   └── 03_neural_recommender.ipynb
+├── ml_models/                            🆕 v2.0 (persisted volume)
+│   ├── vectorizer.pkl
+│   ├── kmeans.pkl
+│   ├── knn.pkl
+│   └── neural_recommender.h5
 │
-├── models/                        # Trained model artifacts
-├── alembic/                       # DB migrations
-│   └── versions/
-├── alembic.ini
+├── tests/                                ✅ 351 tests passing
+├── alembic/versions/
 ├── requirements.txt
-├── requirements-dev.txt
 ├── Dockerfile
-├── .dockerignore
 └── .env
 ```
 
 ### API Design Principles
 
-1. **RESTful** — Standard HTTP verbs (GET, POST, PUT, DELETE)
-2. **Versioned** — `/api/v1/` prefix (future-proof)
-3. **Consistent** — Predictable URL patterns
-4. **Documented** — OpenAPI spec auto-generated
-5. **Validated** — Pydantic schemas for all requests/responses
-6. **Async** — All endpoints async where beneficial
+*[Unchanged from v1.0]*
 
-### Endpoint Overview
+### Endpoint Overview (Updated v2.0)
 
-| Method | Endpoint | Purpose | Auth |
-|--------|----------|---------|------|
-| **POST** | `/api/v1/auth/register` | Create account | ❌ |
-| **POST** | `/api/v1/auth/login` | Get JWT token | ❌ |
-| **POST** | `/api/v1/auth/refresh` | Refresh token | ✅ |
-| **GET** | `/api/v1/users/me` | Current user profile | ✅ |
-| **GET** | `/api/v1/books/search?q=` | Search books | ❌ |
-| **GET** | `/api/v1/books/{book_id}` | Book details | ❌ |
-| **GET** | `/api/v1/books/trending` | NYT bestsellers | ❌ |
-| **POST** | `/api/v1/ratings` | Rate a book | ✅ |
-| **GET** | `/api/v1/ratings/user` | User's ratings | ✅ |
-| **GET** | `/api/v1/recommendations` | Get personalized recs | ✅ |
-| **GET** | `/api/v1/recommendations/{book_id}/similar` | Similar books | ❌ |
-| **POST** | `/api/v1/library` | Add to library | ✅ |
-| **GET** | `/api/v1/library` | Get user library | ✅ |
-| **GET** | `/api/v1/insights/dna` | Reading DNA | ✅ |
-| **GET** | `/health` | Health check | ❌ |
+| Method | Endpoint | Purpose | Auth | Status |
+|--------|----------|---------|------|--------|
+| **POST** | `/api/v1/auth/register` | Create account | ❌ | ✅ Built |
+| **POST** | `/api/v1/auth/login` | Get JWT token | ❌ | ✅ Built |
+| **POST** | `/api/v1/auth/refresh` | Refresh token | ✅ | ✅ Built |
+| **GET** | `/api/v1/users/me` | Current user profile | ✅ | ✅ Built |
+| **PATCH** | `/api/v1/users/me` | Update profile | ✅ | ✅ Built |
+| **DELETE** | `/api/v1/users/me` | Soft delete account | ✅ | ✅ Built |
+| **PATCH** | `/api/v1/users/me/password` | Change password | ✅ | ✅ Built |
+| **GET** | `/api/v1/books/search?q=` | Search books | ❌ | ✅ Built |
+| **GET** | `/api/v1/books/{book_id}` | Book details | ❌ | ✅ Built |
+| **GET** | `/api/v1/books/{book_id}/similar` | Similar books | ❌ | ✅ Built |
+| **POST** | `/api/v1/books/{book_id}/ratings` | Rate a book | ✅ | ✅ Built |
+| **GET** | `/api/v1/books/{book_id}/ratings/me` | My rating for book | ✅ | ✅ Built |
+| **DELETE** | `/api/v1/books/{book_id}/ratings/me` | Remove rating | ✅ | ✅ Built |
+| **GET** | `/api/v1/users/me/ratings` | My all ratings | ✅ | ✅ Built |
+| **POST** | `/api/v1/library` | Add book to library | ✅ | ✅ Built |
+| **GET** | `/api/v1/library` | My book library | ✅ | ✅ Built |
+| **PATCH** | `/api/v1/library/{book_id}` | Update library entry | ✅ | ✅ Built |
+| **DELETE** | `/api/v1/library/{book_id}` | Remove from library | ✅ | ✅ Built |
+| **GET** | `/api/v1/users/me/preferences` | Get preferences | ✅ | ✅ Built |
+| **PUT** | `/api/v1/users/me/preferences` | Update preferences | ✅ | ✅ Built |
+| **POST** | `/api/v1/users/me/preferences/complete` | Complete onboarding | ✅ | ✅ Built |
+| **GET** | `/api/v1/comics/search?q=` | Search comics | ❌ | 🆕 Day 25 |
+| **GET** | `/api/v1/comics/{comic_id}` | Comic details | ❌ | 🆕 v2.0 |
+| **POST** | `/api/v1/comics/{comic_id}/ratings` | Rate a comic | ✅ | 🆕 v2.0 |
+| **POST** | `/api/v1/comics/library` | Add comic to library | ✅ | 🆕 v2.0 |
+| **GET** | `/api/v1/comics/library` | My comic library | ✅ | 🆕 v2.0 |
+| **GET** | `/api/v1/collections` | Home screen collections | ✅ | 🆕 Day 20 |
+| **GET** | `/api/v1/collections/{name}` | Full collection view | ✅ | 🆕 Day 20 |
+| **GET** | `/api/v1/books/{book_id}/series` | Book series order | ❌ | 🆕 Day 18 |
+| **GET** | `/api/v1/comics/{comic_id}/series` | Comic series order | ❌ | 🆕 v2.0 |
+| **GET** | `/api/v1/reading/{content_id}/link` | Get reading URL | ✅ | 🆕 v2.0 |
+| **GET** | `/api/v1/reading/progress` | My reading progress list | ✅ | 🆕 v2.0 |
+| **PATCH** | `/api/v1/reading/{content_id}/progress` | Update progress | ✅ | 🆕 v2.0 |
+| **GET** | `/health` | Health check | ❌ | ✅ Built |
+| **GET** | `/health/cache` | Redis health | ❌ | ✅ Built |
 
 ### Response Format Standard
 
-**Success Response:**
-```json
-{
-  "success": true,
-  "data": { ... },
-  "meta": {
-    "timestamp": "2025-01-15T10:30:00Z",
-    "version": "v1"
-  }
-}
-```
-
-**Error Response:**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "BOOK_NOT_FOUND",
-    "message": "Book with ID xyz not found",
-    "details": { ... }
-  },
-  "meta": {
-    "timestamp": "2025-01-15T10:30:00Z"
-  }
-}
-```
+*[Unchanged from v1.0]*
 
 ### HTTP Status Codes Used
 
-| Code | Meaning | When |
-|------|---------|------|
-| **200** | OK | Successful GET/PUT/DELETE |
-| **201** | Created | Successful POST creation |
-| **204** | No Content | Successful DELETE |
-| **400** | Bad Request | Invalid input |
-| **401** | Unauthorized | Missing/invalid JWT |
-| **403** | Forbidden | Auth valid but no permission |
-| **404** | Not Found | Resource doesn't exist |
-| **409** | Conflict | Duplicate resource |
-| **422** | Unprocessable Entity | Validation errors (Pydantic) |
-| **429** | Too Many Requests | Rate limit hit |
-| **500** | Internal Server Error | Unhandled exception |
-| **503** | Service Unavailable | Downstream API failure |
+*[Unchanged from v1.0]*
 
 ---
 
@@ -597,251 +696,227 @@ backend/
 
 ### Primary Database: PostgreSQL 16
 
-**Rationale:**
-- ✅ **ACID compliance** for rating consistency
-- ✅ **Strong relational model** matches our data
-- ✅ **JSON support** for flexible fields (user preferences)
-- ✅ **Full-text search** built-in (fallback for book search)
-- ✅ **Industry standard** — universal skill
+**Full schema documented in [SCHEMA.md](./SCHEMA.md) v2.0.**
 
-### Database Schema
+### Tables Summary (v2.0)
 
-```sql
--- ============================================
--- USERS TABLE
--- ============================================
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    avatar_url TEXT,
-    preferences JSONB DEFAULT '{}',
-    onboarding_completed BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+**Original 7 tables (Days 1-14) ✅:**
+- users, books, ratings, library_items, recommendations, user_preferences, search_history
 
-CREATE INDEX idx_users_email ON users(email);
+**New 7 tables (Week 3) 🆕:**
+- comics, comic_ratings, comic_library_items, collections, user_collections, reading_progress, series_metadata
 
--- ============================================
--- BOOKS TABLE (Cache of external data)
--- ============================================
-CREATE TABLE books (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    external_id VARCHAR(100) UNIQUE NOT NULL, -- Google Books ID
-    external_source VARCHAR(50), -- 'google_books', 'open_library'
-    title VARCHAR(500) NOT NULL,
-    authors TEXT[] NOT NULL,
-    description TEXT,
-    genres TEXT[],
-    isbn_10 VARCHAR(10),
-    isbn_13 VARCHAR(13),
-    published_year INTEGER,
-    publisher VARCHAR(200),
-    page_count INTEGER,
-    language VARCHAR(10) DEFAULT 'en',
-    cover_url TEXT,
-    average_rating DECIMAL(3,2),
-    ratings_count INTEGER DEFAULT 0,
-    embedding VECTOR(384), -- For content-based ML (optional with pgvector)
-    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_books_external_id ON books(external_id);
-CREATE INDEX idx_books_title ON books USING GIN(to_tsvector('english', title));
-CREATE INDEX idx_books_isbn_13 ON books(isbn_13);
-
--- ============================================
--- RATINGS TABLE (ML training data)
--- ============================================
-CREATE TABLE ratings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-    review_text TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, book_id)
-);
-
-CREATE INDEX idx_ratings_user_id ON ratings(user_id);
-CREATE INDEX idx_ratings_book_id ON ratings(book_id);
-CREATE INDEX idx_ratings_created_at ON ratings(created_at);
-
--- ============================================
--- LIBRARY TABLE (User's books)
--- ============================================
-CREATE TYPE library_status AS ENUM ('want_to_read', 'currently_reading', 'read');
-
-CREATE TABLE library (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    status library_status NOT NULL DEFAULT 'want_to_read',
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    started_reading_at TIMESTAMP,
-    finished_reading_at TIMESTAMP,
-    UNIQUE(user_id, book_id)
-);
-
-CREATE INDEX idx_library_user_status ON library(user_id, status);
-
--- ============================================
--- RECOMMENDATIONS TABLE (Cached ML output)
--- ============================================
-CREATE TABLE recommendations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    score DECIMAL(5,4) NOT NULL,
-    model_type VARCHAR(50) NOT NULL, -- 'content', 'collaborative', 'neural', 'hybrid'
-    explanation TEXT,
-    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_recommendations_user_score ON recommendations(user_id, score DESC);
-```
+**Total: 14 tables** after Week 3 completes.
 
 ### ORM: SQLAlchemy 2.0
 
-**Why SQLAlchemy?**
-- ✅ Industry standard for Python
-- ✅ Type-safe with mypy
-- ✅ Handles complex queries
-- ✅ Migration tool (Alembic) included
-
-**Example Model:**
-```python
-# database/models/user.py
-from sqlalchemy import Column, String, Boolean, DateTime, JSON
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
-import uuid
-from ..base import Base
-
-class User(Base):
-    __tablename__ = "users"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    name = Column(String(100), nullable=False)
-    preferences = Column(JSON, default={})
-    onboarding_completed = Column(Boolean, default=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-```
+*[Rationale unchanged from v1.0]*
 
 ### Migrations: Alembic
 
-**Workflow:**
-1. Modify SQLAlchemy models
-2. Generate migration: `alembic revision --autogenerate -m "add users table"`
-3. Review generated migration file
-4. Apply: `alembic upgrade head`
-5. Rollback if needed: `alembic downgrade -1`
+**v2.0 migration workflow requires 13 sequential migrations** documented in SCHEMA.md §14.
 
 ### Cache: Redis 7
 
-**Use Cases:**
-- API response caching (Google Books, Open Library)
-- Session storage (optional)
-- Rate limiting counters
-- Trending books (weekly refresh)
+**Updated TTL Strategy (v2.0):**
 
-**Data Structures:**
-- **Strings** — Simple key-value cache
-- **Hashes** — Book metadata
-- **Sorted Sets** — Trending books (score = popularity)
-- **Sets** — User's rated book IDs (fast lookups)
-
-**TTL Strategy:**
 | Data | TTL | Reason |
 |------|-----|--------|
 | Book details | 24h | Books rarely change |
-| Search results | 30 min | Fresh but reusable |
-| Trending books | 1 week | NYT updates weekly |
+| Comic details | 24h | Comics rarely change |
+| Search results (books) | 30m | Fresh but reusable |
+| Search results (comics) | 30m | Same pattern |
+| Unified search | 30m | Books + comics combined |
+| Trending books | 1w | NYT updates weekly |
 | User recommendations | 1h | Refresh often |
+| **Home collections** 🆕 | 6h | Balance freshness vs cost |
+| **Series metadata** 🆕 | 7d | Series order rarely changes |
+| **Internet Archive links** 🆕 | 24h | Static once known |
+| **Continue reading list** 🆕 | 5m | Updates frequently |
 | Rate limit counters | Sliding window | Real-time |
 
 ---
 
-## 🤖 AI/ML Specification
+## 🤖 AI/ML Specification (Restructured v2.0)
 
-### Model Portfolio
+### The 5 ML Modules
 
-| # | Model | Library | Purpose | Input | Output |
-|---|-------|---------|---------|-------|--------|
-| 1 | **TF-IDF Vectorizer** | scikit-learn | Content vectors | Book descriptions | Sparse vectors |
-| 2 | **Cosine Similarity** | scikit-learn | Book similarity | Two vectors | Similarity score |
-| 3 | **KNN (User-Based)** | scikit-learn | Find similar users | User-item matrix | Top-K neighbors |
-| 4 | **KMeans** | scikit-learn | User segmentation | User features | Cluster labels |
-| 5 | **Naive Bayes** | scikit-learn | Genre classification | Book text | Genre prediction |
-| 6 | **Neural CF** | Keras | Deep personalization | (user, book) pairs | Rating prediction |
-| 7 | **Sentiment Analyzer** | NLTK + TextBlob | Review analysis | Text | Sentiment score |
-| 8 | **Isolation Forest** | scikit-learn | Fake review detection | Review features | Anomaly score |
+Kitabee ML is organized as 5 focused modules that compose together:
 
-### Model 1: Content-Based (TF-IDF)
+---
 
-**Purpose:** Recommend books similar to ones user liked.
+### Module 1: Vectorizer (Foundation)
 
-**Pipeline:**
-```
-Book descriptions
-      ↓
-Text preprocessing (lowercase, remove stopwords, stem)
-      ↓
-TF-IDF Vectorizer (max_features=5000)
-      ↓
-Sparse matrix of book vectors
-      ↓
-For each user's liked book:
-  Compute cosine similarity with all other books
-      ↓
-Aggregate scores → Top 10 recommendations
-```
+**File:** `ml/vectorizer.py`
+**Technique:** TF-IDF + Cosine Similarity
+**Library:** scikit-learn
+
+**Purpose:** Represent every book and comic as a numeric vector so ML can measure similarity.
+
+**Input:** Text content (title + description + genres + authors)
+**Output:** Sparse TF-IDF vector
+**Used by:** Modules 2, 3, 4, 5
 
 **Hyperparameters:**
 - `max_features`: 5000
-- `ngram_range`: (1, 2)  # unigrams + bigrams
-- `min_df`: 2  # ignore very rare words
+- `ngram_range`: (1, 2)
+- `min_df`: 2
 - `stop_words`: 'english'
 
-### Model 2: Collaborative Filtering (KNN)
+**Key methods:**
+```python
+class BookVectorizer:
+    def fit(self, books_and_comics: List[Content]) -> None
+    def transform(self, content: Content) -> sparse_matrix
+    def similarity(self, id_a: str, id_b: str) -> float
+    def similar_to(self, content_id: str, top_n: int) -> List[ScoredItem]
+```
 
-**Purpose:** "Users like you also liked..."
+---
+
+### Module 2: Collection Engine (Core Feature)
+
+**Files:** `ml/collection_engine.py`, `ml/mood_detector.py`, `ml/title_templates.py`
+**Techniques:** KMeans Clustering + NLP Mood Detection + Template Title Generation
+**Libraries:** scikit-learn + NLTK + TextBlob
+
+**Purpose:** Group books and comics into Netflix-style themed rows with catchy titles.
 
 **Pipeline:**
 ```
-User-Item Rating Matrix
-      ↓
-Compute user similarities (cosine)
-      ↓
-For target user:
-  Find K=20 most similar users
-      ↓
-Aggregate their ratings (weighted by similarity)
-      ↓
-Recommend books current user hasn't seen
+1. All content vectorized (Module 1)
+2. KMeans clusters similar content
+3. Mood detector scans descriptions:
+   Dark words → "Dark But You Cannot Put It Down"
+   Funny words → "Laugh Out Loud Reads"
+   Epic words → "Epic Worlds Built From Scratch"
+4. Title template engine generates catchy display name
+5. Free reading collection assembled from Internet Archive items
+6. Trending collection assembled from recent activity
+7. Collections cached in DB + Redis
 ```
+
+**Mood word dictionary (curated):**
+```python
+MOOD_WORDS = {
+    "dark":       ["dark", "grim", "bleak", "sinister", "haunting", "disturbing"],
+    "funny":      ["funny", "comedy", "humor", "laugh", "witty", "hilarious"],
+    "epic":       ["epic", "vast", "legendary", "grand", "sweeping", "saga"],
+    "romantic":   ["love", "romance", "heart", "passion", "tender"],
+    "thrilling":  ["thriller", "suspense", "tension", "chase", "danger"],
+    "inspiring":  ["inspiring", "courage", "triumph", "hope", "overcome"],
+    "cozy":       ["cozy", "warm", "comfort", "gentle", "peaceful", "charming"],
+}
+```
+
+**Sample collection titles generated:**
+```
+"Epic Worlds Built From Scratch"
+"Dark But You Cannot Put It Down"
+"Read It Before Bed Tonight"
+"Your Next Obsession — Guaranteed"
+"From the Mind of Brandon Sanderson"
+"Free to Read Right Now"
+"Comics — Perfect Starting Points"
+"The Full Journey — Start to Finish"
+"Everyone Is Reading This Right Now"
+```
+
+**Metrics:**
+- Silhouette Score target: > 0.35
+- Manual title quality inspection: 8/10 must feel catchy
+
+---
+
+### Module 3: Series Intelligence
+
+**Files:** `ml/series_detector.py`, `ml/series_builder.py`
+**Techniques:** Regex + NLP + Metadata Parsing
+**Libraries:** NLTK + Python regex + external API metadata
+
+**Purpose:** Detect series membership and generate correct reading order with contextual labels.
+
+**Pipeline:**
+```
+1. Parse metadata fields (series_name, series_order from books/comics tables)
+2. NLP on description for series indicators:
+   - "Book 2 of Foundation"
+   - "sequel to Dune"
+   - "part 3 in the Wheel of Time series"
+3. Cross-reference Comic Vine issue numbers for comics
+4. Classify entry type: main / prequel / spinoff / companion
+5. Build ordered list with labels ("Start Here" on first)
+6. Generate contextual tip for complex universes
+7. Cache in series_metadata table (TTL 7 days)
+```
+
+**Output example:**
+```json
+{
+  "series_name": "Dune",
+  "content_type": "book",
+  "main_series": [
+    {"id": "...", "title": "Dune", "order": 1, "label": "Start Here"},
+    {"id": "...", "title": "Dune Messiah", "order": 2, "label": null},
+    ...
+  ],
+  "companion_series": [
+    {
+      "name": "Prequel Series by Brian Herbert",
+      "entries": [...],
+      "tip": "Read after Book 1 or after all 6 originals."
+    }
+  ],
+  "tip": "Books 1-3 are the core trilogy. Books 4-6 are for dedicated fans."
+}
+```
+
+---
+
+### Module 4: Personalizer (Collaborative Filtering)
+
+**Files:** `ml/collaborative.py`, `ml/personalizer.py`
+**Technique:** KNN User-Based Collaborative Filtering
+**Library:** scikit-learn
+
+**Purpose:** Rank collections per user and generate "Because you loved X..." rows.
+
+**Pipeline:**
+```
+1. Build user-item ratings matrix from ratings + comic_ratings tables
+2. Fit KNN model (k=20, cosine metric)
+3. For target user:
+   - Find 20 most similar users
+   - Aggregate their highly-rated content
+   - Generate "Because you loved [top rated item]" row
+4. Rank generic collections higher/lower based on user's content type preference
+5. Filter out content types user doesn't want (books-only user sees no comics)
+```
+
+**Cold start handling:**
+- New user with < 5 ratings → skip personalized rows, show mood + trending rows only
+- Content type preference from onboarding acts as fallback signal
 
 **Hyperparameters:**
 - `n_neighbors`: 20
 - `metric`: 'cosine'
-- `algorithm`: 'brute' (for small dataset)
+- `algorithm`: 'brute' (small dataset)
 
-### Model 3: Neural Collaborative Filtering
+---
 
-**Purpose:** Learn complex patterns beyond simple similarity.
+### Module 5: Neural Recommender
+
+**File:** `ml/neural.py`
+**Technique:** Neural Collaborative Filtering
+**Library:** Keras + TensorFlow
+
+**Purpose:** Learn complex user-content patterns beyond simple similarity. Adds depth to collection ranking.
 
 **Architecture:**
 ```
-Input: (user_id, book_id)
+Input: (user_id, content_id, content_type)
       ↓
-User Embedding (dim=50) + Book Embedding (dim=50)
+User Embedding (dim=50) + Content Embedding (dim=50)
       ↓
 Concatenate → Dense(128, relu) → Dropout(0.3)
       ↓
@@ -851,98 +926,162 @@ Dense(1, sigmoid) → Predicted rating (0-1)
 ```
 
 **Training:**
-- Loss: Mean Squared Error
+- Loss: MSE
 - Optimizer: Adam (lr=0.001)
 - Epochs: 50 with early stopping
 - Batch size: 256
-- Train/Val split: 80/20
+- Target RMSE: < 0.9
 
-### Hybrid Recommendation Strategy
+**Graceful fallback:** If DB has < 100 total ratings, skip neural training and use content-based + collaborative only.
 
+---
+
+### Hybrid Engine (Orchestration)
+
+**File:** `ml/hybrid.py`
+
+**Purpose:** Combine all modules into final ranked recommendations.
+
+**Weighted formula:**
 ```python
-def get_recommendations(user_id: str) -> List[Book]:
-    # Get scores from each model
-    content_scores = content_based_model.recommend(user_id, top_n=50)
-    collab_scores = knn_model.recommend(user_id, top_n=50)
-    neural_scores = neural_model.recommend(user_id, top_n=50)
-    
-    # Weighted combination
-    final_scores = {}
-    for book_id in all_candidates:
-        final_scores[book_id] = (
-            0.30 * content_scores.get(book_id, 0) +
-            0.30 * collab_scores.get(book_id, 0) +
-            0.40 * neural_scores.get(book_id, 0)
-        )
-    
-    # Diversity filter (max 2 per genre)
-    diverse_recs = apply_diversity_filter(final_scores)
-    
-    # Return top 10
-    return sorted(diverse_recs, key=lambda x: -x['score'])[:10]
+final_score = (
+    0.30 * vectorizer_score +      # Content similarity
+    0.30 * personalizer_score +    # Collaborative filtering
+    0.40 * neural_score            # Deep learning
+)
 ```
 
-### Cold Start Handling
+**Additional layers:**
+1. **Diversity filter** — max 3 items per genre in one row
+2. **Explainability** — attach "Because you loved X" reason
+3. **Content type preference** — respect user's books/comics/both setting
 
-**New user with no ratings:**
-1. Onboarding: Rate 5-10 popular books
-2. Use content-based rec on these initial ratings
-3. Also include NYT bestsellers (broad appeal)
-4. As user rates more, shift weight to collaborative + neural
+---
+
+### Collection Service Assembly (Home Screen)
+
+**File:** `services/collection_service.py`
+
+**`get_home_collections(user_id)` returns minimum 6 rows:**
+
+```
+1. "Because you loved [Top Rated Book]..." (Personalizer)
+2. Mood-based row e.g. "Epic Worlds Built From Scratch" (Collection Engine)
+3. "Free to Read Right Now" (Internet Archive collection)
+4. "Complete Series — Start to Finish" (Series Intelligence)
+5. "Everyone Is Reading This" (Trending)
+6. "Comics — Perfect Starting Points" or "Hidden Gems" (varies)
+7+ Additional mood/genre rows based on user taste
+```
+
+Result cached in Redis for 6h. Invalidated on new rating.
+
+---
+
+### ML Techniques Summary
+
+| # | Technique | Module | Library |
+|---|-----------|--------|---------|
+| 1 | TF-IDF Vectorization | Vectorizer | scikit-learn |
+| 2 | Cosine Similarity | Vectorizer | scikit-learn |
+| 3 | KMeans Clustering | Collection Engine | scikit-learn |
+| 4 | NLP Mood Detection | Collection Engine | NLTK + TextBlob |
+| 5 | Template Title Generation | Collection Engine | Custom rules |
+| 6 | Regex Series Detection | Series Intelligence | Python re |
+| 7 | Metadata NLP Parsing | Series Intelligence | NLTK |
+| 8 | KNN Collaborative Filtering | Personalizer | scikit-learn |
+| 9 | Neural Collaborative Filtering | Neural | Keras |
+| 10 | Weighted Hybrid Ranking | Hybrid | Custom |
+
+**Total: 10 ML techniques across 5 modules + 1 hybrid engine.**
+
+### Evaluation Metrics
+
+| Module | Metric | Target |
+|--------|--------|--------|
+| Vectorizer | Precision@10 (manual) | > 0.65 |
+| Collection Engine | Silhouette Score | > 0.35 |
+| Collection Engine | Title Quality (manual) | 8/10 catchy |
+| Series Intelligence | Order accuracy (top 50 series) | > 90% |
+| Personalizer | Recall@10 | > 0.55 |
+| Neural | RMSE | < 0.9 |
+| Mood Detection | Accuracy (manual sample) | > 80% |
 
 ### Model Serving
 
 **Approach:** Pre-computed + On-demand hybrid
-- **Batch:** Generate recommendations nightly for all active users → cache in DB
-- **Real-time:** Trigger recompute when user rates a book (async job)
+- **Batch:** Collections regenerated every 6h for active users
+- **Real-time:** New rating triggers async re-rank of user's collections
+- **Series metadata:** Computed once, cached 7 days
 
-### Evaluation Metrics
+### ML Model Persistence
 
-| Model | Primary Metric | Target |
-|-------|----------------|--------|
-| Content-Based | Precision@10 | > 0.65 |
-| Collaborative | Recall@10 | > 0.55 |
-| Neural | RMSE | < 0.9 |
-| Sentiment | Accuracy | > 85% |
-| Genre Classifier | F1 Score | > 0.80 |
+**Volume mount in production Docker:**
+```yaml
+volumes:
+  - ./ml_models:/app/ml_models
+```
+
+Files persisted:
+- `vectorizer.pkl` — TF-IDF model
+- `kmeans.pkl` — Cluster centers
+- `knn.pkl` — Collaborative filter
+- `neural_recommender.h5` — Keras model
+
+Retraining triggered:
+- Nightly cron (offline)
+- Manual via admin endpoint (future)
 
 ---
 
 ## 🌐 External API Integrations
 
-### API 1: Google Books API (Primary)
+### API 1: Google Books API (Books Primary) ✅
 
 **Base URL:** `https://www.googleapis.com/books/v1/`
+**Authentication:** API Key
+**Rate Limits:** 100,000 req/day with key
 
 **Endpoints Used:**
 - `GET /volumes?q={query}` — Search books
 - `GET /volumes/{id}` — Book details
 
-**Authentication:** API Key (query parameter)
+**Wrapper:** `external/google_books.py` (already built, 82 tests)
 
-**Rate Limits:**
-- Without key: 1,000 req/day
-- With key: 100,000 req/day
-- Per-second: 100 req/sec
+---
+
+### API 2: Comic Vine API (Comics Primary) 🆕
+
+**Base URL:** `https://comicvine.gamespot.com/api/`
+**Authentication:** API Key (query parameter)
+**Rate Limits:** 200 req/hour (generous with 24h caching)
+**Registration:** Free at comicvine.gamespot.com/api
+
+**Endpoints Used:**
+- `GET /volumes/?filter=name:{query}` — Search comic volumes
+- `GET /volume/4050-{id}/` — Volume details
+- `GET /issues/?filter=volume:{volume_id}` — All issues in a series
 
 **Response Structure:**
 ```json
 {
-  "items": [
+  "error": "OK",
+  "results": [
     {
-      "id": "abc123",
-      "volumeInfo": {
-        "title": "...",
-        "authors": ["..."],
-        "description": "...",
-        "categories": ["..."],
-        "imageLinks": {
-          "thumbnail": "https://...",
-          "smallThumbnail": "https://..."
-        },
-        "averageRating": 4.2,
-        "ratingsCount": 1234
-      }
+      "id": 42165,
+      "name": "Batman: Year One",
+      "publisher": {"id": 10, "name": "DC Comics"},
+      "description": "<p>Bruce Wayne returns...</p>",
+      "start_year": "1987",
+      "count_of_issues": 4,
+      "image": {
+        "original_url": "https://...",
+        "medium_url": "https://..."
+      },
+      "characters": [
+        {"id": 1699, "name": "Batman"},
+        {"id": 3, "name": "James Gordon"}
+      ]
     }
   ]
 }
@@ -950,397 +1089,211 @@ def get_recommendations(user_id: str) -> List[Book]:
 
 **Our Wrapper:**
 ```python
-# external/google_books.py
-class GoogleBooksClient:
-    async def search(self, query: str, max_results: int = 20) -> List[Book]:
-        # Implementation with httpx, retry, error handling
-        ...
-    
-    async def get_details(self, book_id: str) -> Book:
-        ...
+class ComicVineClient:
+    async def search_comics(self, query: str, max_results: int = 20) -> List[Comic]
+    async def get_comic_details(self, volume_id: int) -> Comic
+    async def get_series_issues(self, volume_id: int) -> List[Comic]
 ```
 
-### API 2: Open Library (Fallback)
+**Caching:** All responses cached in Redis for 24h.
 
-**Base URL:** `https://openlibrary.org/`
+---
+
+### API 3: Internet Archive API (Free Reading) 🆕
+
+**Base URL:** `https://archive.org/`
+**Authentication:** None required
+**Rate Limits:** Be respectful (add User-Agent header)
 
 **Endpoints Used:**
-- `GET /search.json?q={query}` — Search
-- `GET /works/{id}.json` — Details
-- `GET /covers/b/isbn/{isbn}-L.jpg` — Cover images
+- `GET /advancedsearch.php?q={query}&output=json` — Search
+- `GET /metadata/{identifier}` — Item metadata + file listing
+- `GET /download/{identifier}/{filename}` — Direct file download
 
-**Authentication:** None required
+**Search filter for public domain books:**
+```
+q=title:{query} AND mediatype:texts AND collection:opensource
+```
 
-**Rate Limits:** No hard limits, but be respectful (add User-Agent header)
+**Search filter for public domain comics:**
+```
+q=title:{query} AND mediatype:image AND collection:comics
+```
 
-**Use Case:** Fallback when Google Books fails or returns insufficient data
+**Metadata Response Structure:**
+```json
+{
+  "metadata": {
+    "identifier": "prideandprejudice00aust",
+    "title": "Pride and Prejudice",
+    "creator": "Jane Austen",
+    "year": "1813",
+    "mediatype": "texts"
+  },
+  "files": [
+    {"name": "pride.epub", "format": "EPUB", "size": "..."},
+    {"name": "pride.pdf", "format": "PDF", "size": "..."}
+  ]
+}
+```
 
-### API 3: NYT Books (Bestsellers)
+**Our Wrapper:**
+```python
+class InternetArchiveClient:
+    async def search_free_books(self, query: str, max_results: int = 20) -> List[Book]
+    async def search_free_comics(self, query: str, max_results: int = 20) -> List[Comic]
+    async def get_reading_links(self, identifier: str) -> ReadingLinks
+    def is_public_domain(self, item: dict) -> bool
+```
+
+**Legal:** Only items from `collection:opensource` or explicitly public_domain flagged are consumed.
+
+---
+
+### API 4: NYT Books API (Trending) 🆕
+
+*[Same as v1.0 — used for "Everyone Is Reading This" collection row]*
 
 **Base URL:** `https://api.nytimes.com/svc/books/v3/`
-
-**Endpoints Used:**
-- `GET /lists/current/{list-name}.json` — Current bestsellers
-- `GET /lists/overview.json` — All lists
-
-**Authentication:** API Key
-
 **Rate Limits:** 500 req/day, 5 req/sec
 
-**Use Case:** "Trending Now" homepage section
+---
 
-### API Resilience Strategy
+### API Resilience Strategy (Updated v2.0)
 
 ```python
-# services/book_service.py
-async def get_book_details(book_id: str) -> Book:
+async def get_content_with_fallback(content_id: str, content_type: str):
     # Try cache first
-    cached = await redis.get(f"book:{book_id}")
+    cached = await redis.get(f"{content_type}:{content_id}")
     if cached:
-        return Book.parse_raw(cached)
-    
-    # Try primary API
+        return parse(cached)
+
+    # Try primary API based on content type
     try:
-        book = await google_books.get_details(book_id)
+        if content_type == "book":
+            content = await google_books.get_details(content_id)
+        elif content_type == "comic":
+            content = await comic_vine.get_comic_details(content_id)
     except (APIError, TimeoutError):
-        # Fallback to Open Library
-        try:
-            book = await open_library.get_details(book_id)
-        except APIError:
-            # Try DB (previously cached)
-            book = await db.get_book_by_external_id(book_id)
-            if not book:
-                raise HTTPException(status_code=404, detail="Book not found")
-    
-    # Cache for 24 hours
-    await redis.setex(f"book:{book_id}", 86400, book.json())
-    return book
+        # Try DB (previously cached full record)
+        content = await db.get_by_external_id(content_id)
+        if not content:
+            raise HTTPException(404, "Content not found")
+
+    # Cache 24h
+    await redis.setex(f"{content_type}:{content_id}", 86400, content.json())
+    return content
 ```
 
 ---
 
 ## 🔐 Authentication & Security
 
-### Authentication: JWT (JSON Web Tokens)
+*[All content unchanged from v1.0 — 351 tests already validate this layer]*
 
-**Flow:**
-```
-1. User submits email + password → POST /auth/login
-2. Server verifies password (bcrypt)
-3. Server generates JWT (signed with SECRET_KEY)
-4. Client stores JWT (AsyncStorage/localStorage)
-5. Client sends JWT in Authorization header
-6. Server validates JWT on each request
-```
+### Additional v2.0 Considerations
 
-**JWT Structure:**
-```json
-{
-  "sub": "user_id_here",
-  "email": "user@example.com",
-  "iat": 1705318200,
-  "exp": 1705404600,
-  "type": "access"
-}
-```
-
-**Token Types:**
-- **Access Token:** 24 hours (short-lived)
-- **Refresh Token:** 30 days (for renewal)
-
-**Configuration:**
-```python
-JWT_SECRET_KEY = "..."  # 256-bit random (from env)
-JWT_ALGORITHM = "HS256"
-JWT_ACCESS_EXPIRE_MINUTES = 1440  # 24h
-JWT_REFRESH_EXPIRE_DAYS = 30
-```
-
-### Password Security
-
-**Hashing:** bcrypt with cost factor 12
-
-**Requirements:**
-- Min 8 characters
-- At least 1 uppercase, 1 lowercase, 1 number
-- No common passwords (validate against list)
-
-**Implementation:**
-```python
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-```
-
-### Security Best Practices
-
-| Concern | Mitigation |
-|---------|------------|
-| **SQL Injection** | SQLAlchemy ORM (parameterized queries) |
-| **XSS** | React's default escaping + Content-Security-Policy |
-| **CSRF** | JWT in Authorization header (not cookies) |
-| **Password leaks** | bcrypt hashing, never log passwords |
-| **API abuse** | Rate limiting (100 req/min per user) |
-| **Secrets in Git** | `.env` in `.gitignore`, use env vars |
-| **HTTPS only** | Nginx redirects HTTP → HTTPS |
-| **CORS** | Whitelist frontend domain only |
-| **Auth token theft** | Short access token expiry (24h) |
-| **Timing attacks** | Constant-time password comparison |
-
-### CORS Configuration
-
-```python
-# main.py
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8081",  # Expo dev
-        "http://localhost:19006", # Expo web
-        "https://kitabee.vercel.app",  # Production web
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
+**Reading Progress Privacy:**
+- `reading_progress` table is fully private
+- Never exposed in public library views
+- Only user themselves can query their own progress
+- Deleted immediately on account deletion (not soft delete)
 
 ---
 
 ## ⚡ Caching Strategy
 
-### Multi-Level Cache
+*[Base strategy unchanged from v1.0]*
 
-```
-Level 1: In-Memory (LRU Cache on API endpoints)
-   ↓ (miss)
-Level 2: Redis (24h TTL for books, 1h for recs)
-   ↓ (miss)
-Level 3: PostgreSQL (permanent for cached API data)
-   ↓ (miss)
-Level 4: External API (fresh data)
-```
+### New Cache Keys in v2.0
 
-### Cache Patterns
+| Key Pattern | TTL | Purpose |
+|-------------|-----|---------|
+| `comic:{comic_id}` | 24h | Comic details |
+| `search:comics:{query}` | 30m | Comic search |
+| `search:all:{query}` | 30m | Unified search |
+| `collections:home:{user_id}` | 6h | Home screen collections |
+| `collection:{name}` | 6h | Individual collection |
+| `series:{name}:{content_type}` | 7d | Series order |
+| `ia:reading_links:{identifier}` | 24h | Internet Archive URLs |
+| `reading_progress:{user_id}` | 5m | Continue reading list |
 
-**Pattern 1: Cache-Aside (Read)**
-```python
-async def get_book(book_id: str) -> Book:
-    # Try cache
-    cached = await redis.get(f"book:{book_id}")
-    if cached:
-        return Book.parse_raw(cached)
-    
-    # Cache miss → fetch from source
-    book = await fetch_from_api(book_id)
-    
-    # Write to cache
-    await redis.setex(f"book:{book_id}", 86400, book.json())
-    return book
-```
+### Cache Invalidation (Updated)
 
-**Pattern 2: Write-Through (Ratings)**
-```python
-async def rate_book(user_id: str, book_id: str, rating: int):
-    # Write to DB
-    await db.insert_rating(user_id, book_id, rating)
-    
-    # Invalidate user's recommendations cache
-    await redis.delete(f"recs:user:{user_id}")
-    
-    # Trigger async ML retraining
-    await queue.publish("retrain_user", user_id)
-```
-
-### Cache Invalidation
-
-**Time-Based (TTL):**
-- Books: 24h
-- Search: 30min
-- Recommendations: 1h
-- Trending: 1 week
-
-**Event-Based:**
-- New rating → invalidate user recs
-- Book update (rare) → invalidate book cache
+| Event | Keys Invalidated |
+|-------|------------------|
+| New book rating | `recs:user:{user_id}*`, `collections:home:{user_id}` |
+| New comic rating | `recs:user:{user_id}*`, `collections:home:{user_id}` |
+| Book/comic added to library | `collections:home:{user_id}` |
+| Reading progress update | `reading_progress:{user_id}` |
+| Preferences update | `collections:home:{user_id}` |
 
 ---
 
 ## 📊 Performance Requirements
 
-### Latency Targets (p95)
+### Latency Targets (p95) — Updated v2.0
 
 | Endpoint | Target | Reason |
 |----------|--------|--------|
 | `GET /books/search` | < 500ms | Interactive search |
+| `GET /comics/search` 🆕 | < 500ms | Interactive search |
 | `GET /books/{id}` (cached) | < 100ms | Instant book details |
-| `GET /books/{id}` (fresh) | < 2s | External API call |
-| `GET /recommendations` | < 300ms | User-facing home |
+| `GET /comics/{id}` (cached) 🆕 | < 100ms | Instant comic details |
+| `GET /collections` (cached) 🆕 | < 300ms | Home screen load |
+| `GET /collections` (fresh) 🆕 | < 3s | Full ML regeneration |
+| `GET /books/{id}/series` 🆕 | < 50ms | Series order (cached 7d) |
+| `GET /reading/{id}/link` 🆕 | < 200ms | Fetch reading URL |
 | `POST /ratings` | < 200ms | Snappy interaction |
 | `POST /auth/login` | < 400ms | Includes bcrypt |
 
 ### Throughput Targets
-
-- **API:** 100 req/sec sustained
-- **Concurrent users:** 500
-- **Daily requests:** 1M
-
-### Optimization Techniques
-
-1. **Async I/O** — Non-blocking external API calls
-2. **Connection pooling** — DB (10 connections), Redis (20)
-3. **Query optimization** — Indexes on frequent lookups
-4. **N+1 avoidance** — SQLAlchemy `selectinload`
-5. **Response compression** — gzip via Nginx
-6. **CDN for static** — Vercel handles frontend caching
+*[Unchanged from v1.0]*
 
 ---
 
 ## 🚨 Failure Modes & Resilience
 
-### Failure Scenarios & Handling
+### Failure Scenarios & Handling (Updated v2.0)
 
 | Failure | Detection | Response | User Experience |
 |---------|-----------|----------|-----------------|
-| **Google Books down** | HTTP timeout | Fallback to Open Library | Slight delay, still works |
-| **All external APIs down** | All failed | Serve from DB cache | Older data, warning banner |
+| **Google Books down** | HTTP timeout | Fallback to DB cache | Slower but works |
+| **Comic Vine down** 🆕 | HTTP timeout | Fallback to DB cache | Slower for new comics |
+| **Internet Archive down** 🆕 | HTTP timeout | Hide "Free to Read" row | Graceful, no error shown |
+| **All external APIs down** | All failed | Serve from DB cache | Older data warning |
 | **Database down** | Connection error | 503 Service Unavailable | "Try again in a moment" |
-| **Redis down** | Connection error | Bypass cache (slow but works) | Slower but functional |
-| **ML model fails** | Exception in service | Return popular books | Generic recs (transparent) |
-| **Auth service down** | JWT verification fails | 401 Unauthorized | Login screen |
-| **Rate limit hit (external)** | 429 response | Exponential backoff + cache | Fallback to cache |
-| **Disk full** | Write error | Log to monitoring | Read-only mode |
+| **Redis down** | Connection error | Bypass cache (slow) | Slower but functional |
+| **ML model fails** 🆕 | Exception | Return popular items | Generic recs transparent |
+| **Collection engine fails** 🆕 | Exception | Show fallback popular rows | User sees generic Netflix rows |
+| **Series detection empty** 🆕 | No series found | Hide series section | Clean detail page |
+| **EPUB fetch fails** 🆕 | Timeout/404 | Show retry button | "Content unavailable" |
+| **Auth service down** | JWT fails | 401 Unauthorized | Login screen |
 
-### Circuit Breaker Pattern
+### Graceful Degradation (Updated v2.0)
 
-```python
-from tenacity import retry, stop_after_attempt, wait_exponential
+**Priority order for home screen collections:**
+1. Personalized rows (ML models) — best
+2. Mood-based rows (Collection Engine) — good
+3. Free reading row (Internet Archive) — always works
+4. Trending row (NYT) — cached weekly
+5. Popular items (static fallback) — last resort
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    reraise=True
-)
-async def call_google_books(query: str):
-    # After 3 failures with exponential backoff, give up
-    ...
-```
-
-### Graceful Degradation
-
-**Priority order for recommendations:**
-1. Personalized (ML models) — best
-2. Similar users' favorites — good
-3. Trending books (NYT) — okay
-4. Popular books (static list) — fallback
-5. Empty state with search CTA — last resort
+**Priority order for content details:**
+1. Full metadata from cache
+2. Metadata from external API
+3. Basic metadata from DB
+4. Error state with retry
 
 ---
 
 ## 🚀 Deployment Architecture
 
-### Environments
+*[Base architecture unchanged from v1.0]*
 
-| Environment | Purpose | URL Pattern |
-|-------------|---------|-------------|
-| **Local** | Development | `localhost:8000` |
-| **Staging** | Pre-prod testing | `staging.kitabee.app` (optional) |
-| **Production** | Live users | `kitabee.vercel.app` + `api.kitabee.app` |
+### v2.0 Updates
 
-### Backend Deployment: AWS EC2
-
-**Instance:** t3.medium (2 vCPU, 4GB RAM)
-**Region:** ap-south-1 (Mumbai)
-**OS:** Ubuntu 22.04 LTS
-
-**Stack on EC2:**
-```
-┌──────────────────────────────────────┐
-│  Nginx (port 80, 443)                │
-│  ├─ SSL termination                  │
-│  └─ Reverse proxy → 127.0.0.1:8000   │
-└──────────────────────────────────────┘
-                ↓
-┌──────────────────────────────────────┐
-│  Docker Compose Stack                │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ FastAPI (Uvicorn)              │  │
-│  │ Port 8000                      │  │
-│  └────────────────────────────────┘  │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ PostgreSQL 16                  │  │
-│  │ Port 5432                      │  │
-│  └────────────────────────────────┘  │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ Redis 7                        │  │
-│  │ Port 6379                      │  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
-```
-
-### Frontend Deployment
-
-**Web (Vercel):**
-```bash
-# Build for web
-cd mobile
-npx expo export -p web
-
-# Deploy
-vercel deploy --prod
-```
-
-**Mobile (Expo Go):**
-```bash
-# Publish update
-eas update --branch production --message "v0.1.0"
-
-# Share QR code (from Expo dashboard)
-```
-
-### Docker Configuration
-
-**Backend Dockerfile:**
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# System dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Application code
-COPY src/ ./src/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
-
-# Non-root user
-RUN useradd -m -u 1000 appuser
-USER appuser
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
-```
-
-**docker-compose.yml (production):**
+**ML Model Volume Mount (production docker-compose.yml):**
 ```yaml
 services:
   api:
@@ -1350,155 +1303,75 @@ services:
     environment:
       - DATABASE_URL=postgresql://kitabee:pass@postgres:5432/kitabee_db
       - REDIS_URL=redis://redis:6379
+      - COMIC_VINE_API_KEY=${COMIC_VINE_API_KEY}
+      - NYT_API_KEY=${NYT_API_KEY}
+    volumes:
+      - ./ml_models:/app/ml_models   # 🆕 v2.0: persist trained models
     depends_on:
       - postgres
       - redis
     restart: unless-stopped
-    
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=kitabee
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=kitabee_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - api
-    restart: unless-stopped
+```
 
-volumes:
-  postgres_data:
+**Backend Dockerfile (v2.0):**
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Download NLTK data (v2.0)
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
+
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+
+# Create ml_models directory (v2.0)
+RUN mkdir -p /app/ml_models
+
+RUN useradd -m -u 1000 appuser
+USER appuser
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 ```
 
 ---
 
 ## 🔄 CI/CD Pipeline
 
-### GitHub Actions Workflows
-
-**Workflow 1: Backend Tests (on every push)**
-```yaml
-# .github/workflows/backend-test.yml
-name: Backend Tests
-
-on:
-  push:
-    paths:
-      - 'backend/**'
-  pull_request:
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: test
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-    
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          cd backend
-          pip install -r requirements-dev.txt
-      - name: Run tests
-        run: |
-          cd backend
-          pytest --cov=src --cov-report=xml
-```
-
-**Workflow 2: Deploy Backend (on main merge)**
-```yaml
-# .github/workflows/deploy-backend.yml
-name: Deploy Backend
-
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: SSH to EC2 and deploy
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/kitabee
-            git pull
-            docker compose down
-            docker compose up -d --build
-```
+*[Unchanged from v1.0]*
 
 ---
 
 ## 📈 Monitoring & Observability
 
-### Logging
+*[Unchanged from v1.0]*
 
-**Library:** Loguru (Python)
+### v2.0 Additions
 
-**Levels:**
-- `DEBUG` — Development only
-- `INFO` — Normal operations
-- `WARNING` — Recoverable issues
-- `ERROR` — Failed operations
-- `CRITICAL` — System-level failures
-
-**Format:**
-```
-2025-01-15 10:30:45 | INFO | src.api.routes.books | Search: query='sapiens' | user_id=abc123
-```
-
-### Metrics (Free Tier)
-
-**MVP Approach:** Simple health endpoint + logs
-
-**Post-MVP:** Prometheus + Grafana
-
-### Health Check Endpoint
-
+**ML Model Health Check:**
 ```python
-@app.get("/health")
-async def health():
+@app.get("/health/ml")
+async def ml_health():
     return {
         "status": "healthy",
-        "checks": {
-            "database": await check_db(),
-            "redis": await check_redis(),
-            "external_apis": await check_external()
-        }
+        "models_loaded": {
+            "vectorizer": vectorizer.is_loaded(),
+            "collection_engine": collection_engine.is_ready(),
+            "collaborative": collaborative.is_loaded(),
+            "neural": neural.is_loaded(),
+        },
+        "last_training": {...}
     }
 ```
 
@@ -1506,190 +1379,95 @@ async def health():
 
 ## 💻 Development Environment
 
-### Required Tools
+*[Unchanged from v1.0]*
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Python | 3.11 | Backend |
-| Node.js | 20+ | Frontend |
-| Docker Desktop | Latest | Databases |
-| Git | Latest | Version control |
-| VS Code | Latest | IDE |
-| Postman/Thunder | Latest | API testing |
+### v2.0 Additions
 
-### VS Code Extensions
+**New dev requirements:**
+```
+pip install scikit-learn keras tensorflow nltk textblob jupyter pandas numpy
+```
 
-- Python, Pylance
-- ESLint, Prettier
-- Docker
-- GitLens
-- Thunder Client
-- Material Icon Theme
-- Error Lens
+**New env vars:**
+```
+COMIC_VINE_API_KEY=xxx
+NYT_API_KEY=xxx
+```
 
-### Development Workflow
-
+**Jupyter for ML experimentation:**
 ```bash
-# Backend
-cd backend
-.\venv\Scripts\activate
-uvicorn src.main:app --reload
-
-# Frontend
-cd mobile
-npx expo start
-
-# Databases
-cd docker
-docker compose up -d
+jupyter notebook backend/notebooks/
 ```
 
 ---
 
 ## 🧪 Testing Strategy
 
-### Test Pyramid
+*[Unchanged from v1.0]*
 
-```
-        /\
-       /  \  E2E (5%)
-      /────\
-     /      \  Integration (25%)
-    /────────\
-   /          \  Unit (70%)
-  /────────────\
-```
+### Current Status
+- **351 tests passing** (Days 1-14 complete)
+- **78% coverage** (above 70% target)
+- Zero regressions across all changes
 
-### Backend Testing
+### v2.0 Test Additions Planned
 
-**Unit Tests (pytest):**
-```python
-# tests/test_auth.py
-def test_password_hashing():
-    plain = "MySecure123!"
-    hashed = hash_password(plain)
-    assert verify_password(plain, hashed) is True
-    assert verify_password("wrong", hashed) is False
-```
+- `test_comic_vine.py` — Comic Vine client tests
+- `test_internet_archive.py` — Internet Archive client tests
+- `test_vectorizer.py` — TF-IDF vectorizer tests
+- `test_collection_engine.py` — Collection generation tests
+- `test_series_intelligence.py` — Series ordering tests
+- `test_collaborative.py` — KNN filter tests
+- `test_neural.py` — Neural recommender tests
+- `test_collection_service.py` — Orchestration tests
+- `test_collections_api.py` — Collections endpoint tests
+- `test_comics_api.py` — Comics endpoints tests
 
-**Integration Tests:**
-```python
-# tests/test_api_books.py
-def test_search_books(client, mock_google_books):
-    response = client.get("/api/v1/books/search?q=sapiens")
-    assert response.status_code == 200
-    assert len(response.json()["data"]) > 0
-```
-
-**Coverage Target:** 70%+
-
-### Frontend Testing
-
-**Component Tests (Jest + RN Testing Library):**
-```typescript
-// __tests__/BookCard.test.tsx
-test('renders book title', () => {
-  const { getByText } = render(<BookCard title="Sapiens" />);
-  expect(getByText('Sapiens')).toBeTruthy();
-});
-```
+**Target after Week 3:** 500+ tests, 75%+ coverage maintained.
 
 ---
 
 ## 📏 Code Standards
 
-### Python
-
-**Formatting:** Black (line-length: 100)
-**Import sorting:** isort
-**Linting:** flake8
-**Type hints:** Required for all functions
-
-**Naming:**
-- `snake_case` for functions/variables
-- `PascalCase` for classes
-- `UPPER_SNAKE` for constants
-- `_prefix` for private
-
-### TypeScript
-
-**Formatting:** Prettier
-**Linting:** ESLint (with react-native config)
-**Strict mode:** Enabled
-
-**Naming:**
-- `camelCase` for functions/variables
-- `PascalCase` for components/types
-- `UPPER_SNAKE` for constants
-
-### Git Commits
-
-**Format (Conventional Commits):**
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**Types:**
-- `feat` — New feature
-- `fix` — Bug fix
-- `docs` — Documentation
-- `style` — Formatting
-- `refactor` — Code restructuring
-- `test` — Adding tests
-- `chore` — Maintenance
-
-**Example:**
-```
-feat(auth): implement JWT-based authentication
-
-- Add JWT token generation on login
-- Add auth middleware for protected routes
-- Add refresh token endpoint
-
-Closes #12
-```
+*[Unchanged from v1.0 — see RULES.md for full standards]*
 
 ---
 
 ## 📦 Dependency Management
 
-### Backend (Python)
+### Backend (Python) — Updated v2.0
 
-**File:** `requirements.txt` (production), `requirements-dev.txt` (dev)
+New dependencies added:
+```
+scikit-learn==1.5.2
+keras==3.6.0
+tensorflow==2.18.0
+nltk==3.9.1
+textblob==0.18.0
+pandas==2.2.3
+numpy==1.26.4
+jupyter==1.1.1
+```
 
-**Update Strategy:**
-- Pin exact versions (`==`) for production
-- Weekly `pip list --outdated` review
-- Security patches: immediate
-- Major upgrades: end of week batches
+### Frontend (Node.js) — Updated v2.0
 
-### Frontend (Node.js)
-
-**File:** `package.json`
-
-**Update Strategy:**
-- Use `^` for minor version flexibility
-- `npm audit` weekly
-- Expo SDK: only upgrade on Expo team's release cycle
-
-### Security Scanning
-
-**GitHub Dependabot:** Enabled (auto-PRs for vulnerabilities)
+New dependencies added:
+```
+react-native-webview: ^13.x  (EPUB reader)
+react-native-image-viewer: ^3.x  (Comics reader)
+```
 
 ---
 
 ## 📎 Appendix
 
-### Reference Documents
+### Reference Documents (Updated v2.0)
 
-- [PRD.md](./PRD.md) — Product requirements
-- [API_DESIGN.md](./API_DESIGN.md) — Detailed API spec (coming)
-- [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) — Full DB docs (coming)
-- [DEPLOYMENT.md](./DEPLOYMENT.md) — Deployment guide (coming)
+- [PRD.md](./PRD.md) v2.0 — Product requirements
+- [SCHEMA.md](./SCHEMA.md) v2.0 — Database schema
+- [IMPLEMENTATIONPLAN.md](./IMPLEMENTATIONPLAN.md) v2.0 — Daily execution plan
+- [TRACKER.md](./TRACKER.md) v2.0 — Progress tracking
+- [APPFLOW.md](./APPFLOW.md) — User flows (v2.0 update pending)
 
 ### External Documentation
 
@@ -1699,25 +1477,23 @@ Closes #12
 - [SQLAlchemy Docs](https://docs.sqlalchemy.org)
 - [PostgreSQL Docs](https://www.postgresql.org/docs/)
 - [Redis Docs](https://redis.io/docs/)
-
-### Glossary
-
-- **ASGI:** Asynchronous Server Gateway Interface
-- **CORS:** Cross-Origin Resource Sharing
-- **JWT:** JSON Web Token
-- **ORM:** Object-Relational Mapping
-- **TTL:** Time To Live
-- **CDN:** Content Delivery Network
-- **CI/CD:** Continuous Integration/Deployment
+- [scikit-learn Docs](https://scikit-learn.org)
+- [Keras Docs](https://keras.io)
+- [Comic Vine API Docs](https://comicvine.gamespot.com/api/documentation)
+- [Internet Archive API Docs](https://archive.org/developers/)
 
 ### Change Log
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | [Today] | [Your Name] | Initial Tech Spec |
+| 1.0 | [Original] | [Your Name] | Initial Tech Spec |
+| 2.0 | [Today] | [Your Name] | Added Comics + Internet Archive + Netflix-style Collections + Series Intelligence. Restructured ML into 5 focused modules. Added EPUB/Comics reader frontend architecture. Added new API endpoints for collections, comics, series, reading progress. Updated deployment for ML model persistence. |
 
 ---
 
 **End of Tech Spec** 🔧
 
 *"Design like an architect. Build like an engineer. Ship like a pro."*
+
+---
+

@@ -1,9 +1,10 @@
+---
 # 🗄️ Kitabee — Data Schema Document
 
-> **Document Version:** 1.0  
-> **Last Updated:** [Today's Date]  
-> **Author:** [Your Name]  
-> **Status:** 🟢 Approved for Implementation  
+> **Document Version:** 2.0
+> **Last Updated:** [Today's Date]
+> **Author:** [Your Name]
+> **Status:** 🟢 Approved for Implementation
 > **Related Docs:** [PRD.md](./PRD.md) | [TECHSPEC.md](./TECHSPEC.md) | [APPFLOW.md](./APPFLOW.md)
 
 ---
@@ -14,13 +15,20 @@
 2. [Design Principles](#-design-principles)
 3. [Entity Relationship Diagram](#-entity-relationship-diagram)
 4. [Database Schema (PostgreSQL)](#-database-schema-postgresql)
-   - [4.1 Users Table](#41-users-table)
-   - [4.2 Books Table](#42-books-table)
-   - [4.3 Ratings Table](#43-ratings-table)
-   - [4.4 Library Table](#44-library-table)
-   - [4.5 Recommendations Table](#45-recommendations-table)
-   - [4.6 User Preferences Table](#46-user-preferences-table)
-   - [4.7 Search History Table](#47-search-history-table)
+   - [4.1 Users Table](#41-users-table) ✅ Built
+   - [4.2 Books Table](#42-books-table) ✅ Built
+   - [4.3 Ratings Table](#43-ratings-table) ✅ Built
+   - [4.4 Library Table](#44-library-table) ✅ Built
+   - [4.5 Recommendations Table](#45-recommendations-table) ✅ Built
+   - [4.6 User Preferences Table](#46-user-preferences-table) ✅ Built
+   - [4.7 Search History Table](#47-search-history-table) ✅ Built
+   - [4.8 Comics Table](#48-comics-table) 🆕 Week 3
+   - [4.9 Comic Ratings Table](#49-comic-ratings-table) 🆕 Week 3
+   - [4.10 Comic Library Table](#410-comic-library-table) 🆕 Week 3
+   - [4.11 Collections Table](#411-collections-table) 🆕 Week 3
+   - [4.12 User Collections Table](#412-user-collections-table) 🆕 Week 3
+   - [4.13 Reading Progress Table](#413-reading-progress-table) 🆕 Week 3
+   - [4.14 Series Metadata Table](#414-series-metadata-table) 🆕 Week 3
 5. [Enumerations](#-enumerations)
 6. [Indexes & Performance](#-indexes--performance)
 7. [Constraints & Validations](#-constraints--validations)
@@ -40,14 +48,25 @@
 ## 🎯 Overview
 
 ### Purpose
-This document is the **single source of truth** for every data structure in Kitabee. If it's not documented here, it doesn't exist.
+This document is the **single source of truth** for every data structure in Kitabee. If it is not documented here, it does not exist.
+
+### What Changed in v2.0
+Kitabee now supports books + comics, Netflix-style themed collections, series reading order guides, and free reading via Internet Archive. This required 7 new tables:
+
+- **comics** — Comic metadata (parallel to books)
+- **comic_ratings** — Ratings on comics
+- **comic_library_items** — Comics in user library
+- **collections** — Themed rows curated by ML
+- **user_collections** — Per-user collection ranking
+- **reading_progress** — Track reading position for free content
+- **series_metadata** — Cached series reading order data
 
 ### Scope
-- ✅ PostgreSQL database schema (tables, columns, types)
+- ✅ PostgreSQL database schema (books + comics + collections + reading)
 - ✅ Pydantic models (backend validation)
 - ✅ TypeScript interfaces (frontend types)
 - ✅ Redis cache key patterns
-- ✅ External API response shapes
+- ✅ External API response shapes (Google Books, Comic Vine, Internet Archive)
 - ✅ ML model input/output structures
 - ✅ Sample data for testing
 
@@ -55,13 +74,13 @@ This document is the **single source of truth** for every data structure in Kita
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| **Table names** | `snake_case`, plural | `users`, `ratings` |
+| **Table names** | `snake_case`, plural | `users`, `ratings`, `comics` |
 | **Column names** | `snake_case` | `user_id`, `created_at` |
 | **Primary keys** | `id` (UUID) | `id UUID PRIMARY KEY` |
-| **Foreign keys** | `<entity>_id` | `user_id`, `book_id` |
+| **Foreign keys** | `<entity>_id` | `user_id`, `book_id`, `comic_id` |
 | **Timestamps** | `<action>_at` | `created_at`, `updated_at` |
 | **Booleans** | `is_<state>` or `has_<thing>` | `is_active`, `has_completed` |
-| **Enums** | `snake_case` values | `'want_to_read'` |
+| **Enums** | `snake_case` values | `'want_to_read'`, `'main'` |
 | **Indexes** | `idx_<table>_<columns>` | `idx_ratings_user_book` |
 | **Constraints** | `<table>_<column>_<type>` | `users_email_unique` |
 
@@ -70,48 +89,30 @@ This document is the **single source of truth** for every data structure in Kita
 ## 🎨 Design Principles
 
 ### 1. UUIDs Over Auto-Increment
-- ✅ **Prevents enumeration attacks** (can't guess `/users/1`, `/users/2`)
-- ✅ **Client-side generation** (offline-first ready)
-- ✅ **Distributed systems safe** (no coordination needed)
-- ⚠️ Slightly larger storage (16 bytes vs 4-8 bytes) — acceptable
+- ✅ Prevents enumeration attacks
+- ✅ Client-side generation possible
+- ✅ Distributed systems safe
 
 ### 2. Timestamps Everywhere
-Every table has:
-- `created_at` — When the row was created
-- `updated_at` — Last modification time (auto-updated via trigger)
-
-**Why:** Debugging, analytics, audit trails, temporal queries.
+Every table has `created_at` and `updated_at`.
 
 ### 3. Soft Deletes (Where Appropriate)
-User accounts use `deleted_at` timestamp instead of hard DELETE for:
-- ✅ Data recovery (accidental deletions)
-- ✅ Compliance (regulatory requirements)
-- ⚠️ Ratings/library are hard-deleted (privacy on request)
+User accounts use `deleted_at`. Ratings/library are hard-deleted for privacy.
 
 ### 4. JSONB for Flexible Fields
-Use `JSONB` (PostgreSQL) for:
-- User preferences (evolving structure)
-- Book metadata extras (varies by source)
-- ML feature vectors (dynamic schema)
-
-**Advantages:**
-- Schema flexibility without migrations
-- Native indexing support (GIN indexes)
-- Query with `->` and `->>` operators
+Used for preferences, metadata, ML feature vectors, collection items list.
 
 ### 5. Explicit Over Implicit
-- Every column has a comment
-- Every relationship has a foreign key
-- Every constraint has a name
-- Every index has a purpose documented
+Every column has a comment. Every relationship has a foreign key.
 
 ### 6. Denormalization for Performance
-Some fields duplicated for query speed:
-- `books.average_rating` (calculated from ratings, cached)
-- `books.ratings_count` (denormalized count)
-- Updated via triggers or async jobs
+Some fields duplicated for query speed (`books.average_rating`, `books.ratings_count`).
 
-**Trade-off:** Slightly more storage + write complexity for massive read performance gain.
+### 7. Content-Type Symmetry (New in v2.0)
+Books and comics are separate tables but share nearly identical schema. This makes ML and services content-type-agnostic while keeping SQL clean.
+
+### 8. Cached ML Outputs
+Collections, series metadata, and recommendations are all cached in DB (not just Redis) so they survive restarts and can be inspected.
 
 ---
 
@@ -123,87 +124,125 @@ Some fields duplicated for query speed:
 ┌─────────────────┐
 │     USERS       │
 │                 │
-│ id (PK)         │◄────┐
-│ email           │     │
-│ password_hash   │     │
-│ name            │     │
-│ preferences     │     │
-│ created_at      │     │
-└─────────────────┘     │
-        │               │
-        │ 1:N           │
-        │               │
-        ▼               │
-┌─────────────────┐     │
-│    RATINGS      │     │
-│                 │     │
-│ id (PK)         │     │
-│ user_id (FK)────┼─────┘
-│ book_id (FK)────┼─────┐
-│ rating          │     │
-│ review_text     │     │
-│ created_at      │     │
-└─────────────────┘     │
-                        │
-┌─────────────────┐     │
-│     BOOKS       │◄────┤
-│                 │     │
-│ id (PK)         │     │
-│ external_id     │     │
-│ title           │     │
-│ authors[]       │     │
-│ description     │     │
-│ genres[]        │     │
-│ cover_url       │     │
-│ isbn_13         │     │
-│ avg_rating      │     │
-│ created_at      │     │
-└─────────────────┘     │
-        │               │
-        │ 1:N           │
-        │               │
-        ▼               │
-┌─────────────────┐     │
-│    LIBRARY      │     │
-│                 │     │
-│ id (PK)         │     │
-│ user_id (FK)────┼─────┘
-│ book_id (FK)    │
-│ status          │
-│ added_at        │
-└─────────────────┘
+│ id (PK)         │◄──────────────┬──────────────┬──────────────┐
+│ email           │               │              │              │
+│ password_hash   │               │              │              │
+│ name            │               │              │              │
+│ preferences     │               │              │              │
+│ created_at      │               │              │              │
+└─────────────────┘               │              │              │
+        │                         │              │              │
+        │ 1:N                     │              │              │
+        ▼                         │              │              │
+┌─────────────────┐               │              │              │
+│    RATINGS      │               │              │              │
+│                 │               │              │              │
+│ user_id (FK)────┘               │              │              │
+│ book_id (FK)────┐               │              │              │
+└─────────────────┘               │              │              │
+                                  │              │              │
+┌─────────────────┐               │              │              │
+│     BOOKS       │◄──────────────┤              │              │
+│                 │               │              │              │
+│ id (PK)         │               │              │              │
+│ external_id     │               │              │              │
+│ title           │               │              │              │
+│ series_name     │               │              │              │
+│ series_order    │               │              │              │
+└─────────────────┘               │              │              │
+        │                         │              │              │
+        │ 1:N                     │              │              │
+        ▼                         │              │              │
+┌─────────────────┐               │              │              │
+│    LIBRARY      │               │              │              │
+│ user_id (FK)────┘               │              │              │
+└─────────────────┘               │              │              │
+                                  │              │              │
+                                  │              │              │
+┌─────────────────┐               │              │              │
+│     COMICS      │◄──────────────┼──────────────┤              │
+│  🆕 v2.0        │               │              │              │
+│ id (PK)         │               │              │              │
+│ external_id     │ (Comic Vine)  │              │              │
+│ title           │               │              │              │
+│ series_name     │               │              │              │
+│ issue_number    │               │              │              │
+│ is_free_online  │               │              │              │
+└─────────────────┘               │              │              │
+        │                         │              │              │
+        │ 1:N                     │              │              │
+        ▼                         │              │              │
+┌─────────────────┐               │              │              │
+│ COMIC_RATINGS   │               │              │              │
+│  🆕 v2.0        │               │              │              │
+│ user_id (FK)────┤               │              │              │
+│ comic_id (FK)   │               │              │              │
+└─────────────────┘               │              │              │
+                                  │              │              │
+┌────────────────────┐            │              │              │
+│ COMIC_LIBRARY_ITEMS│            │              │              │
+│  🆕 v2.0           │            │              │              │
+│ user_id (FK)───────┘            │              │              │
+│ comic_id (FK)                   │              │              │
+└────────────────────┘            │              │              │
+                                  │              │              │
+┌─────────────────┐               │              │              │
+│  COLLECTIONS    │               │              │              │
+│  🆕 v2.0        │               │              │              │
+│ id (PK)         │               │              │              │
+│ name            │               │              │              │
+│ title           │               │              │              │
+│ collection_type │               │              │              │
+│ items_json      │               │              │              │
+│ generated_at    │               │              │              │
+└─────────────────┘               │              │              │
+        │                         │              │              │
+        │ N:M                     │              │              │
+        ▼                         │              │              │
+┌──────────────────┐              │              │              │
+│ USER_COLLECTIONS │              │              │              │
+│  🆕 v2.0         │              │              │              │
+│ user_id (FK)─────┘              │              │              │
+│ collection_id    │              │              │              │
+│ rank             │              │              │              │
+└──────────────────┘              │              │              │
+                                  │              │              │
+┌──────────────────┐              │              │              │
+│ READING_PROGRESS │              │              │              │
+│  🆕 v2.0         │              │              │              │
+│ user_id (FK)─────┘              │              │              │
+│ content_id       │              │              │              │
+│ content_type     │              │              │              │
+│ progress_percent │              │              │              │
+└──────────────────┘              │              │              │
+                                  │              │              │
+┌──────────────────┐              │              │              │
+│ SERIES_METADATA  │              │              │              │
+│  🆕 v2.0         │              │              │              │
+│ series_name      │              │              │              │
+│ content_type     │              │              │              │
+│ ordered_items    │              │              │              │
+│ tips             │              │              │              │
+└──────────────────┘              │              │              │
 
-┌─────────────────┐
-│RECOMMENDATIONS  │  (Cached ML output)
-│                 │
-│ id (PK)         │
-│ user_id (FK)    │
-│ book_id (FK)    │
-│ score           │
-│ model_type      │
-│ explanation     │
-│ generated_at    │
-└─────────────────┘
+┌─────────────────┐               │              │              │
+│RECOMMENDATIONS  │               │              │              │
+│ user_id (FK)────┘               │              │              │
+│ book_id (FK)                    │              │              │
+│ model_type                      │              │              │
+└─────────────────┘               │              │              │
 
-┌─────────────────┐
-│USER_PREFERENCES │  (Extended settings)
-│                 │
-│ id (PK)         │
-│ user_id (FK)    │
-│ favorite_genres │
-│ reading_pace    │
-│ notification_settings │
-└─────────────────┘
+┌─────────────────┐               │              │              │
+│USER_PREFERENCES │               │              │              │
+│ user_id (FK)────────────────────┘              │              │
+│ content_type_preference (NEW)   │              │              │
+└─────────────────┘               │              │              │
 
-┌─────────────────┐
-│SEARCH_HISTORY   │  (User's searches)
-│                 │
-│ id (PK)         │
-│ user_id (FK)    │
-│ query           │
-│ results_count   │
-│ searched_at     │
-└─────────────────┘
+┌─────────────────┐               │              │              │
+│SEARCH_HISTORY   │               │              │              │
+│ user_id (FK)────────────────────────────────────┘              │
+│ content_type_filter (NEW)       │              │              │
+└─────────────────┘               │              │              │
 ```
 
 ### Relationship Summary
@@ -212,21 +251,28 @@ Some fields duplicated for query speed:
 |------|-----|------|---------|
 | Users → Ratings | 1:N | ON DELETE CASCADE |
 | Users → Library | 1:N | ON DELETE CASCADE |
+| Users → ComicRatings | 1:N | ON DELETE CASCADE |
+| Users → ComicLibrary | 1:N | ON DELETE CASCADE |
+| Users → UserCollections | 1:N | ON DELETE CASCADE |
+| Users → ReadingProgress | 1:N | ON DELETE CASCADE |
 | Users → Recommendations | 1:N | ON DELETE CASCADE |
 | Users → SearchHistory | 1:N | ON DELETE CASCADE |
 | Books → Ratings | 1:N | ON DELETE CASCADE |
 | Books → Library | 1:N | ON DELETE CASCADE |
 | Books → Recommendations | 1:N | ON DELETE CASCADE |
+| Comics → ComicRatings | 1:N | ON DELETE CASCADE |
+| Comics → ComicLibrary | 1:N | ON DELETE CASCADE |
+| Collections → UserCollections | 1:N | ON DELETE CASCADE |
 
 ---
 
 ## 🗄️ Database Schema (PostgreSQL)
 
-### 4.1 Users Table
+### 4.1 Users Table ✅ Built (Days 1-14)
 
 **Purpose:** Store user accounts and authentication data.
 
-**SQL Definition:**
+*[Unchanged from v1.0 — already built and in production]*
 
 ```sql
 CREATE TABLE users (
@@ -244,59 +290,27 @@ CREATE TABLE users (
     last_login_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE, -- Soft delete
-    
+    deleted_at TIMESTAMP WITH TIME ZONE,
+
     CONSTRAINT users_email_unique UNIQUE (email),
     CONSTRAINT users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
     CONSTRAINT users_name_length CHECK (LENGTH(name) BETWEEN 2 AND 100)
 );
 
-COMMENT ON TABLE users IS 'User accounts for Kitabee';
-COMMENT ON COLUMN users.id IS 'Unique user identifier (UUID v4)';
-COMMENT ON COLUMN users.email IS 'User email, used for login';
-COMMENT ON COLUMN users.password_hash IS 'Bcrypt-hashed password (cost factor 12)';
-COMMENT ON COLUMN users.onboarding_completed IS 'True after user rates 5+ initial books';
-COMMENT ON COLUMN users.deleted_at IS 'Soft delete timestamp (NULL = active)';
-
--- Indexes
 CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE deleted_at IS NULL;
 CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_last_login ON users(last_login_at);
 ```
 
-**Column Details:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | UUID | ❌ | `gen_random_uuid()` | Primary key |
-| `email` | VARCHAR(255) | ❌ | - | Login email, unique |
-| `password_hash` | VARCHAR(255) | ❌ | - | Bcrypt hash |
-| `name` | VARCHAR(100) | ❌ | - | Display name (2-100 chars) |
-| `avatar_url` | TEXT | ✅ | NULL | Profile picture URL |
-| `bio` | TEXT | ✅ | NULL | Optional user bio |
-| `date_of_birth` | DATE | ✅ | NULL | For age-appropriate recs |
-| `onboarding_completed` | BOOLEAN | ❌ | FALSE | Completed initial setup? |
-| `is_active` | BOOLEAN | ❌ | TRUE | Account status |
-| `is_superuser` | BOOLEAN | ❌ | FALSE | Grants admin privileges (set via DB only) |
-| `email_verified` | BOOLEAN | ❌ | FALSE | Email verification status |
-| `last_login_at` | TIMESTAMP | ✅ | NULL | Last successful login |
-| `created_at` | TIMESTAMP | ❌ | NOW() | Account creation time |
-| `updated_at` | TIMESTAMP | ❌ | NOW() | Last modification |
-| `deleted_at` | TIMESTAMP | ✅ | NULL | Soft delete marker |
-
-**Business Rules:**
-- Email must be valid format
-- Password stored as bcrypt hash (cost=12)
-- Name is 2-100 characters
-- Soft deletes preserve data for 30 days, then hard delete
-
 ---
 
-### 4.2 Books Table
+### 4.2 Books Table ✅ Built (Updated v2.0)
 
-**Purpose:** Cache book metadata from external APIs (Google Books, Open Library).
+**Purpose:** Cache book metadata from external APIs. Now includes series and free-reading fields.
 
-**SQL Definition:**
+**Changes in v2.0:**
+- Added `series_name`, `series_order`, `series_entry_type` (for series intelligence)
+- Added `is_free_online`, `internet_archive_id`, `free_epub_url` (for free reading)
 
 ```sql
 CREATE TABLE books (
@@ -319,26 +333,36 @@ CREATE TABLE books (
     cover_url_large TEXT,
     average_rating DECIMAL(3,2) DEFAULT 0.00,
     ratings_count INTEGER DEFAULT 0,
-    kitabee_rating DECIMAL(3,2), -- Our internal aggregated rating
+    kitabee_rating DECIMAL(3,2),
     kitabee_ratings_count INTEGER DEFAULT 0,
-    metadata JSONB DEFAULT '{}', -- Flexible extras
+
+    -- Series intelligence fields (v2.0)
+    series_name VARCHAR(300),
+    series_order INTEGER,
+    series_entry_type VARCHAR(20),  -- 'main' | 'prequel' | 'spinoff' | 'companion'
+
+    -- Free reading fields (v2.0)
+    is_free_online BOOLEAN NOT NULL DEFAULT FALSE,
+    internet_archive_id VARCHAR(200),
+    free_epub_url TEXT,
+    free_pdf_url TEXT,
+
+    -- ML mood tag (v2.0, populated by mood_detector)
+    mood_tags TEXT[] DEFAULT '{}',
+
+    metadata JSONB DEFAULT '{}',
     cached_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
+
     CONSTRAINT books_external_unique UNIQUE (external_source, external_id),
     CONSTRAINT books_rating_range CHECK (average_rating BETWEEN 0 AND 5),
     CONSTRAINT books_page_count_positive CHECK (page_count > 0 OR page_count IS NULL),
-    CONSTRAINT books_year_valid CHECK (published_year BETWEEN 1000 AND EXTRACT(YEAR FROM CURRENT_DATE) + 1)
+    CONSTRAINT books_year_valid CHECK (published_year BETWEEN 1000 AND EXTRACT(YEAR FROM CURRENT_DATE) + 1),
+    CONSTRAINT books_series_entry_type CHECK (series_entry_type IN ('main', 'prequel', 'spinoff', 'companion') OR series_entry_type IS NULL)
 );
 
-COMMENT ON TABLE books IS 'Book metadata cached from external APIs';
-COMMENT ON COLUMN books.external_id IS 'ID from source API (e.g., Google Books volume ID)';
-COMMENT ON COLUMN books.external_source IS 'Which API this came from';
-COMMENT ON COLUMN books.metadata IS 'Additional fields specific to source API';
-COMMENT ON COLUMN books.kitabee_rating IS 'Aggregated rating from Kitabee users only';
-
--- Indexes
+-- Existing indexes
 CREATE INDEX idx_books_external ON books(external_source, external_id);
 CREATE INDEX idx_books_isbn_13 ON books(isbn_13) WHERE isbn_13 IS NOT NULL;
 CREATE INDEX idx_books_title_gin ON books USING GIN(to_tsvector('english', title));
@@ -346,58 +370,18 @@ CREATE INDEX idx_books_authors_gin ON books USING GIN(authors);
 CREATE INDEX idx_books_genres_gin ON books USING GIN(genres);
 CREATE INDEX idx_books_avg_rating ON books(average_rating DESC);
 CREATE INDEX idx_books_cached_at ON books(cached_at);
-```
 
-**Column Details:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | UUID | ❌ | `gen_random_uuid()` | Primary key |
-| `external_id` | VARCHAR(100) | ❌ | - | ID from source API |
-| `external_source` | VARCHAR(50) | ❌ | `'google_books'` | API source |
-| `title` | VARCHAR(500) | ❌ | - | Book title |
-| `subtitle` | VARCHAR(500) | ✅ | NULL | Optional subtitle |
-| `authors` | TEXT[] | ❌ | - | Array of author names |
-| `description` | TEXT | ✅ | NULL | Book description |
-| `genres` | TEXT[] | ❌ | `{}` | Genre tags |
-| `tags` | TEXT[] | ✅ | `{}` | Custom tags |
-| `isbn_10` | VARCHAR(10) | ✅ | NULL | ISBN-10 identifier |
-| `isbn_13` | VARCHAR(13) | ✅ | NULL | ISBN-13 identifier |
-| `published_year` | INTEGER | ✅ | NULL | Publication year |
-| `publisher` | VARCHAR(200) | ✅ | NULL | Publisher name |
-| `page_count` | INTEGER | ✅ | NULL | Number of pages |
-| `language` | VARCHAR(10) | ❌ | `'en'` | ISO language code |
-| `cover_url` | TEXT | ✅ | NULL | Small cover image |
-| `cover_url_large` | TEXT | ✅ | NULL | High-res cover |
-| `average_rating` | DECIMAL(3,2) | ✅ | 0.00 | External avg rating |
-| `ratings_count` | INTEGER | ✅ | 0 | External ratings count |
-| `kitabee_rating` | DECIMAL(3,2) | ✅ | NULL | Our users' avg rating |
-| `kitabee_ratings_count` | INTEGER | ✅ | 0 | Count of Kitabee ratings |
-| `metadata` | JSONB | ✅ | `{}` | Extra API-specific data |
-| `cached_at` | TIMESTAMP | ❌ | NOW() | When cached from API |
-| `created_at` | TIMESTAMP | ❌ | NOW() | First seen |
-| `updated_at` | TIMESTAMP | ❌ | NOW() | Last updated |
-
-**Metadata JSONB Example:**
-```json
-{
-  "google_books": {
-    "preview_link": "https://books.google.com/...",
-    "info_link": "https://books.google.com/...",
-    "maturity_rating": "NOT_MATURE"
-  },
-  "content_warnings": ["violence", "explicit_language"],
-  "awards": ["Pulitzer Prize 2020"]
-}
+-- New indexes v2.0
+CREATE INDEX idx_books_series ON books(series_name, series_order) WHERE series_name IS NOT NULL;
+CREATE INDEX idx_books_free_online ON books(is_free_online) WHERE is_free_online = TRUE;
+CREATE INDEX idx_books_mood_tags_gin ON books USING GIN(mood_tags);
 ```
 
 ---
 
-### 4.3 Ratings Table
+### 4.3 Ratings Table ✅ Built
 
-**Purpose:** Store user ratings and reviews (core ML training data).
-
-**SQL Definition:**
+*[Unchanged from v1.0]*
 
 ```sql
 CREATE TABLE ratings (
@@ -411,18 +395,12 @@ CREATE TABLE ratings (
     helpful_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
+
     CONSTRAINT ratings_user_book_unique UNIQUE (user_id, book_id),
     CONSTRAINT ratings_value_range CHECK (rating BETWEEN 1 AND 5),
     CONSTRAINT ratings_review_length CHECK (LENGTH(review_text) <= 5000)
 );
 
-COMMENT ON TABLE ratings IS 'User ratings and reviews of books';
-COMMENT ON COLUMN ratings.rating IS 'Star rating (1-5)';
-COMMENT ON COLUMN ratings.review_text IS 'Optional written review';
-COMMENT ON COLUMN ratings.is_spoiler IS 'Whether review contains spoilers';
-
--- Indexes
 CREATE INDEX idx_ratings_user_id ON ratings(user_id);
 CREATE INDEX idx_ratings_book_id ON ratings(book_id);
 CREATE INDEX idx_ratings_user_book ON ratings(user_id, book_id);
@@ -430,45 +408,21 @@ CREATE INDEX idx_ratings_rating ON ratings(rating);
 CREATE INDEX idx_ratings_created_at ON ratings(created_at DESC);
 ```
 
-**Column Details:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | UUID | ❌ | `gen_random_uuid()` | Primary key |
-| `user_id` | UUID | ❌ | - | FK → users.id |
-| `book_id` | UUID | ❌ | - | FK → books.id |
-| `rating` | SMALLINT | ❌ | - | 1-5 stars |
-| `review_text` | TEXT | ✅ | NULL | Written review (max 5000 chars) |
-| `review_title` | VARCHAR(200) | ✅ | NULL | Optional review headline |
-| `is_spoiler` | BOOLEAN | ❌ | FALSE | Contains plot spoilers |
-| `helpful_count` | INTEGER | ❌ | 0 | Post-MVP: helpful votes |
-| `created_at` | TIMESTAMP | ❌ | NOW() | When rated |
-| `updated_at` | TIMESTAMP | ❌ | NOW() | Last edit |
-
-**Business Rules:**
-- One user can rate one book only ONCE (unique constraint)
-- Rating must be 1-5 (integer)
-- Rating updates trigger recommendation cache invalidation
-- Rating creation triggers ML model retrain (async)
-
 ---
 
-### 4.4 Library Table
+### 4.4 Library Table ✅ Built
 
-**Purpose:** Track user's personal book collection (want to read, reading, read).
-
-**SQL Definition:**
+*[Unchanged from v1.0. Note: this is `library_items` in the actual codebase.]*
 
 ```sql
--- Create enum type first
 CREATE TYPE library_status_enum AS ENUM (
     'want_to_read',
     'currently_reading',
     'read',
-    'dnf' -- Did Not Finish
+    'dnf'
 );
 
-CREATE TABLE library (
+CREATE TABLE library_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -481,58 +435,30 @@ CREATE TABLE library (
     is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
     added_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
+
     CONSTRAINT library_user_book_unique UNIQUE (user_id, book_id),
     CONSTRAINT library_page_valid CHECK (current_page >= 0 AND (total_pages IS NULL OR current_page <= total_pages)),
     CONSTRAINT library_dates_valid CHECK (
-        finished_reading_at IS NULL OR 
-        started_reading_at IS NULL OR 
+        finished_reading_at IS NULL OR
+        started_reading_at IS NULL OR
         finished_reading_at >= started_reading_at
     )
 );
 
-COMMENT ON TABLE library IS 'User book collections and reading status';
-COMMENT ON COLUMN library.status IS 'Current status of book in library';
-COMMENT ON COLUMN library.current_page IS 'Reading progress tracker';
-
--- Indexes
-CREATE INDEX idx_library_user_id ON library(user_id);
-CREATE INDEX idx_library_book_id ON library(book_id);
-CREATE INDEX idx_library_user_status ON library(user_id, status);
-CREATE INDEX idx_library_added_at ON library(added_at DESC);
-```
-
-**Column Details:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | UUID | ❌ | `gen_random_uuid()` | Primary key |
-| `user_id` | UUID | ❌ | - | FK → users.id |
-| `book_id` | UUID | ❌ | - | FK → books.id |
-| `status` | ENUM | ❌ | `'want_to_read'` | Reading status |
-| `current_page` | INTEGER | ✅ | 0 | Progress tracker |
-| `total_pages` | INTEGER | ✅ | NULL | Cached from book |
-| `started_reading_at` | TIMESTAMP | ✅ | NULL | When began reading |
-| `finished_reading_at` | TIMESTAMP | ✅ | NULL | When completed |
-| `notes` | TEXT | ✅ | NULL | Personal notes |
-| `is_favorite` | BOOLEAN | ❌ | FALSE | Marked as favorite |
-| `added_at` | TIMESTAMP | ❌ | NOW() | When added to library |
-| `updated_at` | TIMESTAMP | ❌ | NOW() | Last status change |
-
-**State Transitions:**
-```
-want_to_read → currently_reading → read
-                    ↓
-                   dnf
+CREATE INDEX idx_library_user_id ON library_items(user_id);
+CREATE INDEX idx_library_book_id ON library_items(book_id);
+CREATE INDEX idx_library_user_status ON library_items(user_id, status);
+CREATE INDEX idx_library_added_at ON library_items(added_at DESC);
 ```
 
 ---
 
-### 4.5 Recommendations Table
+### 4.5 Recommendations Table ✅ Built (Updated v2.0)
 
-**Purpose:** Cache ML-generated recommendations for fast retrieval.
+**Purpose:** Cache ML-generated recommendations.
 
-**SQL Definition:**
+**Changes in v2.0:**
+- Added `content_id` polymorphic reference and `content_type` (recommendations work for books AND comics)
 
 ```sql
 CREATE TYPE recommendation_model_enum AS ENUM (
@@ -544,70 +470,49 @@ CREATE TYPE recommendation_model_enum AS ENUM (
     'popular'
 );
 
+CREATE TYPE content_type_enum AS ENUM ('book', 'comic');
+
 CREATE TABLE recommendations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    score DECIMAL(6,5) NOT NULL, -- 0.00000 to 1.00000
+    book_id UUID REFERENCES books(id) ON DELETE CASCADE,
+    comic_id UUID REFERENCES comics(id) ON DELETE CASCADE,
+    content_type content_type_enum NOT NULL DEFAULT 'book',
+    score DECIMAL(6,5) NOT NULL,
     rank INTEGER NOT NULL,
     model_type recommendation_model_enum NOT NULL,
     explanation TEXT,
     metadata JSONB DEFAULT '{}',
     generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 hour'),
-    
+
     CONSTRAINT recommendations_score_range CHECK (score BETWEEN 0 AND 1),
-    CONSTRAINT recommendations_rank_positive CHECK (rank > 0)
+    CONSTRAINT recommendations_rank_positive CHECK (rank > 0),
+    CONSTRAINT recommendations_content_ref CHECK (
+        (content_type = 'book' AND book_id IS NOT NULL AND comic_id IS NULL) OR
+        (content_type = 'comic' AND comic_id IS NOT NULL AND book_id IS NULL)
+    )
 );
 
-COMMENT ON TABLE recommendations IS 'Cached ML recommendations per user';
-COMMENT ON COLUMN recommendations.score IS 'Confidence score (0-1)';
-COMMENT ON COLUMN recommendations.rank IS 'Position in recommended list';
-COMMENT ON COLUMN recommendations.explanation IS 'Human-readable "why" explanation';
-COMMENT ON COLUMN recommendations.expires_at IS 'When this cache expires';
-
--- Indexes
 CREATE INDEX idx_recommendations_user_rank ON recommendations(user_id, rank);
 CREATE INDEX idx_recommendations_user_score ON recommendations(user_id, score DESC);
 CREATE INDEX idx_recommendations_expires ON recommendations(expires_at);
 CREATE INDEX idx_recommendations_model ON recommendations(model_type);
-```
-
-**Column Details:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | UUID | ❌ | `gen_random_uuid()` | Primary key |
-| `user_id` | UUID | ❌ | - | FK → users.id |
-| `book_id` | UUID | ❌ | - | FK → books.id |
-| `score` | DECIMAL(6,5) | ❌ | - | Confidence 0.00000-1.00000 |
-| `rank` | INTEGER | ❌ | - | 1st, 2nd, 3rd... |
-| `model_type` | ENUM | ❌ | - | Which model generated this |
-| `explanation` | TEXT | ✅ | NULL | Why this book was recommended |
-| `metadata` | JSONB | ✅ | `{}` | Model-specific data |
-| `generated_at` | TIMESTAMP | ❌ | NOW() | When calculated |
-| `expires_at` | TIMESTAMP | ❌ | NOW() + 1h | Cache expiration |
-
-**Metadata JSONB Example:**
-```json
-{
-  "based_on_books": ["book_id_1", "book_id_2"],
-  "similar_users_count": 42,
-  "genre_match_score": 0.87,
-  "content_similarity": 0.72,
-  "diversity_boost_applied": true
-}
+CREATE INDEX idx_recommendations_content_type ON recommendations(content_type);
 ```
 
 ---
 
-### 4.6 User Preferences Table
+### 4.6 User Preferences Table ✅ Built (Updated v2.0)
 
-**Purpose:** Store extended user preferences and settings.
+**Purpose:** Store extended user preferences.
 
-**SQL Definition:**
+**Changes in v2.0:**
+- Added `content_type_preference` (books/comics/both)
 
 ```sql
+CREATE TYPE content_preference_enum AS ENUM ('books', 'comics', 'both');
+
 CREATE TABLE user_preferences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -615,78 +520,49 @@ CREATE TABLE user_preferences (
     preferred_languages TEXT[] NOT NULL DEFAULT '{en}',
     excluded_genres TEXT[] DEFAULT '{}',
     content_warnings_hide TEXT[] DEFAULT '{}',
-    reading_pace VARCHAR(20) DEFAULT 'medium', -- 'slow', 'medium', 'fast'
-    preferred_book_length VARCHAR(20) DEFAULT 'any', -- 'short', 'medium', 'long', 'any'
-    theme VARCHAR(20) NOT NULL DEFAULT 'system', -- 'light', 'dark', 'system'
+    reading_pace VARCHAR(20) DEFAULT 'medium',
+    preferred_book_length VARCHAR(20) DEFAULT 'any',
+    content_type_preference content_preference_enum NOT NULL DEFAULT 'both',  -- NEW v2.0
+    theme VARCHAR(20) NOT NULL DEFAULT 'system',
     notification_settings JSONB NOT NULL DEFAULT '{"email": false, "push": false}',
     privacy_settings JSONB NOT NULL DEFAULT '{"public_library": false, "public_ratings": false}',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
+
     CONSTRAINT user_preferences_user_unique UNIQUE (user_id),
     CONSTRAINT user_preferences_theme_valid CHECK (theme IN ('light', 'dark', 'system')),
     CONSTRAINT user_preferences_pace_valid CHECK (reading_pace IN ('slow', 'medium', 'fast'))
 );
 
-COMMENT ON TABLE user_preferences IS 'Extended user preferences and settings';
-
--- Indexes
 CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
 CREATE INDEX idx_user_preferences_genres_gin ON user_preferences USING GIN(favorite_genres);
-```
-
-**Notification Settings JSONB:**
-```json
-{
-  "email": true,
-  "push": false,
-  "categories": {
-    "new_recommendations": true,
-    "reading_reminders": false,
-    "weekly_digest": true,
-    "friend_activity": false
-  }
-}
-```
-
-**Privacy Settings JSONB:**
-```json
-{
-  "public_library": false,
-  "public_ratings": false,
-  "show_reading_pace": true,
-  "allow_analytics": true
-}
+CREATE INDEX idx_user_preferences_content_type ON user_preferences(content_type_preference);
 ```
 
 ---
 
-### 4.7 Search History Table
+### 4.7 Search History Table ✅ Built (Updated v2.0)
 
-**Purpose:** Track user searches for personalization and UX improvements.
-
-**SQL Definition:**
+**Changes in v2.0:**
+- Added `content_type_filter` (which tab was active when searched)
 
 ```sql
 CREATE TABLE search_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     query VARCHAR(500) NOT NULL,
-    normalized_query VARCHAR(500) NOT NULL, -- Lowercase, trimmed
+    normalized_query VARCHAR(500) NOT NULL,
+    content_type_filter VARCHAR(20) DEFAULT 'all',  -- NEW v2.0: 'all' | 'books' | 'comics'
     results_count INTEGER NOT NULL DEFAULT 0,
     clicked_book_id UUID REFERENCES books(id) ON DELETE SET NULL,
+    clicked_comic_id UUID REFERENCES comics(id) ON DELETE SET NULL,  -- NEW v2.0
     session_id VARCHAR(100),
-    device_type VARCHAR(20), -- 'mobile', 'tablet', 'web'
+    device_type VARCHAR(20),
     searched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
+
     CONSTRAINT search_history_query_not_empty CHECK (LENGTH(TRIM(query)) > 0)
 );
 
-COMMENT ON TABLE search_history IS 'User search queries for analytics and personalization';
-COMMENT ON COLUMN search_history.normalized_query IS 'Normalized for deduplication';
-COMMENT ON COLUMN search_history.clicked_book_id IS 'Which book user clicked from results';
-
--- Indexes
 CREATE INDEX idx_search_history_user_id ON search_history(user_id);
 CREATE INDEX idx_search_history_searched_at ON search_history(searched_at DESC);
 CREATE INDEX idx_search_history_normalized ON search_history(normalized_query);
@@ -694,689 +570,754 @@ CREATE INDEX idx_search_history_normalized ON search_history(normalized_query);
 
 ---
 
+### 4.8 Comics Table 🆕 (Week 3)
+
+**Purpose:** Cache comic metadata from Comic Vine and Internet Archive.
+
+**SQL Definition:**
+
+```sql
+CREATE TABLE comics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    external_id VARCHAR(100) NOT NULL,
+    external_source VARCHAR(50) NOT NULL DEFAULT 'comic_vine',
+    title VARCHAR(500) NOT NULL,
+    creators TEXT[] NOT NULL DEFAULT '{}',  -- writers + artists combined
+    publisher VARCHAR(200),
+    description TEXT,
+    genres TEXT[] NOT NULL DEFAULT '{}',
+    characters TEXT[] DEFAULT '{}',  -- Batman, Superman, Wolverine etc.
+    tags TEXT[] DEFAULT '{}',
+    published_year INTEGER,
+    page_count INTEGER,
+    language VARCHAR(10) NOT NULL DEFAULT 'en',
+    cover_url TEXT,
+    cover_url_large TEXT,
+
+    -- Series info (comics almost always in series)
+    series_name VARCHAR(300),
+    issue_number INTEGER,
+    volume_number INTEGER,
+    series_entry_type VARCHAR(20),  -- 'main' | 'annual' | 'oneshot' | 'special'
+
+    -- Ratings (aggregated from comic_ratings table)
+    average_rating DECIMAL(3,2) DEFAULT 0.00,
+    ratings_count INTEGER DEFAULT 0,
+    kitabee_rating DECIMAL(3,2),
+    kitabee_ratings_count INTEGER DEFAULT 0,
+
+    -- Free reading fields
+    is_free_online BOOLEAN NOT NULL DEFAULT FALSE,
+    internet_archive_id VARCHAR(200),
+    free_image_urls TEXT[],  -- Array of page image URLs
+    free_pdf_url TEXT,
+
+    -- ML mood tag
+    mood_tags TEXT[] DEFAULT '{}',
+
+    metadata JSONB DEFAULT '{}',
+    cached_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT comics_external_unique UNIQUE (external_source, external_id),
+    CONSTRAINT comics_rating_range CHECK (average_rating BETWEEN 0 AND 5),
+    CONSTRAINT comics_page_count_positive CHECK (page_count > 0 OR page_count IS NULL),
+    CONSTRAINT comics_year_valid CHECK (published_year BETWEEN 1900 AND EXTRACT(YEAR FROM CURRENT_DATE) + 1),
+    CONSTRAINT comics_entry_type CHECK (series_entry_type IN ('main', 'annual', 'oneshot', 'special') OR series_entry_type IS NULL)
+);
+
+COMMENT ON TABLE comics IS 'Comic metadata cached from Comic Vine + Internet Archive';
+COMMENT ON COLUMN comics.creators IS 'Combined writers and artists';
+COMMENT ON COLUMN comics.characters IS 'Featured characters (Batman, Wolverine, etc.)';
+COMMENT ON COLUMN comics.is_free_online IS 'True if readable free via Internet Archive';
+COMMENT ON COLUMN comics.free_image_urls IS 'Array of page image URLs for in-app reader';
+
+-- Indexes
+CREATE INDEX idx_comics_external ON comics(external_source, external_id);
+CREATE INDEX idx_comics_title_gin ON comics USING GIN(to_tsvector('english', title));
+CREATE INDEX idx_comics_creators_gin ON comics USING GIN(creators);
+CREATE INDEX idx_comics_characters_gin ON comics USING GIN(characters);
+CREATE INDEX idx_comics_genres_gin ON comics USING GIN(genres);
+CREATE INDEX idx_comics_series ON comics(series_name, issue_number) WHERE series_name IS NOT NULL;
+CREATE INDEX idx_comics_free_online ON comics(is_free_online) WHERE is_free_online = TRUE;
+CREATE INDEX idx_comics_publisher ON comics(publisher);
+CREATE INDEX idx_comics_avg_rating ON comics(average_rating DESC);
+CREATE INDEX idx_comics_mood_tags_gin ON comics USING GIN(mood_tags);
+```
+
+---
+
+### 4.9 Comic Ratings Table 🆕 (Week 3)
+
+**Purpose:** User ratings and reviews for comics.
+
+```sql
+CREATE TABLE comic_ratings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comic_id UUID NOT NULL REFERENCES comics(id) ON DELETE CASCADE,
+    rating SMALLINT NOT NULL,
+    review_text TEXT,
+    review_title VARCHAR(200),
+    is_spoiler BOOLEAN NOT NULL DEFAULT FALSE,
+    helpful_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT comic_ratings_user_comic_unique UNIQUE (user_id, comic_id),
+    CONSTRAINT comic_ratings_value_range CHECK (rating BETWEEN 1 AND 5),
+    CONSTRAINT comic_ratings_review_length CHECK (LENGTH(review_text) <= 5000)
+);
+
+CREATE INDEX idx_comic_ratings_user_id ON comic_ratings(user_id);
+CREATE INDEX idx_comic_ratings_comic_id ON comic_ratings(comic_id);
+CREATE INDEX idx_comic_ratings_user_comic ON comic_ratings(user_id, comic_id);
+CREATE INDEX idx_comic_ratings_rating ON comic_ratings(rating);
+CREATE INDEX idx_comic_ratings_created_at ON comic_ratings(created_at DESC);
+```
+
+---
+
+### 4.10 Comic Library Table 🆕 (Week 3)
+
+**Purpose:** User's comic collection (parallel to library_items for books).
+
+```sql
+CREATE TABLE comic_library_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comic_id UUID NOT NULL REFERENCES comics(id) ON DELETE CASCADE,
+    status library_status_enum NOT NULL DEFAULT 'want_to_read',
+    current_page INTEGER DEFAULT 0,
+    total_pages INTEGER,
+    started_reading_at TIMESTAMP WITH TIME ZONE,
+    finished_reading_at TIMESTAMP WITH TIME ZONE,
+    notes TEXT,
+    is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+    added_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT comic_library_user_comic_unique UNIQUE (user_id, comic_id),
+    CONSTRAINT comic_library_page_valid CHECK (current_page >= 0 AND (total_pages IS NULL OR current_page <= total_pages))
+);
+
+CREATE INDEX idx_comic_library_user_id ON comic_library_items(user_id);
+CREATE INDEX idx_comic_library_comic_id ON comic_library_items(comic_id);
+CREATE INDEX idx_comic_library_user_status ON comic_library_items(user_id, status);
+CREATE INDEX idx_comic_library_added_at ON comic_library_items(added_at DESC);
+```
+
+---
+
+### 4.11 Collections Table 🆕 (Week 3)
+
+**Purpose:** Netflix-style themed collections generated by ML. Each row on the home screen corresponds to one collection.
+
+```sql
+CREATE TYPE collection_type_enum AS ENUM (
+    'personalized',    -- "Because you loved X..."
+    'mood',            -- "Dark But You Cannot Put It Down"
+    'utility',         -- "Complete Series — Read in Order"
+    'trending',        -- "Everyone Is Reading This"
+    'free_reading',    -- "Free to Read Right Now"
+    'series',          -- Auto-generated series row
+    'author',          -- "From the Mind of X"
+    'genre'            -- "Best of Sci-Fi This Year"
+);
+
+CREATE TABLE collections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(200) NOT NULL,  -- internal name: "epic_fantasy_cluster_3"
+    title VARCHAR(300) NOT NULL,  -- display title: "Epic Worlds Built From Scratch"
+    description TEXT,
+    collection_type collection_type_enum NOT NULL,
+    content_type VARCHAR(20) NOT NULL DEFAULT 'mixed',  -- 'books' | 'comics' | 'mixed'
+    mood VARCHAR(50),  -- 'dark', 'funny', 'epic', etc. (nullable)
+
+    -- Items in this collection (denormalized for fast reads)
+    items_json JSONB NOT NULL DEFAULT '[]',
+    -- Example items_json:
+    -- [
+    --   {"content_type": "book", "id": "uuid1", "position": 1},
+    --   {"content_type": "comic", "id": "uuid2", "position": 2},
+    --   ...
+    -- ]
+
+    item_count INTEGER NOT NULL DEFAULT 0,
+
+    -- Metadata for personalization
+    based_on_book_id UUID REFERENCES books(id) ON DELETE SET NULL,
+    based_on_comic_id UUID REFERENCES comics(id) ON DELETE SET NULL,
+    based_on_author VARCHAR(200),
+    based_on_genre VARCHAR(100),
+
+    -- Freshness tracking
+    generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '6 hours'),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT collections_content_type_valid CHECK (content_type IN ('books', 'comics', 'mixed')),
+    CONSTRAINT collections_item_count_positive CHECK (item_count >= 0)
+);
+
+COMMENT ON TABLE collections IS 'ML-curated themed rows for Netflix-style home screen';
+COMMENT ON COLUMN collections.name IS 'Internal identifier (e.g., epic_fantasy_cluster_3)';
+COMMENT ON COLUMN collections.title IS 'Catchy display title shown to user';
+COMMENT ON COLUMN collections.items_json IS 'Ordered list of content items with type + id';
+
+CREATE INDEX idx_collections_type ON collections(collection_type);
+CREATE INDEX idx_collections_content_type ON collections(content_type);
+CREATE INDEX idx_collections_mood ON collections(mood) WHERE mood IS NOT NULL;
+CREATE INDEX idx_collections_expires_at ON collections(expires_at);
+CREATE INDEX idx_collections_generated_at ON collections(generated_at DESC);
+```
+
+---
+
+### 4.12 User Collections Table 🆕 (Week 3)
+
+**Purpose:** Per-user ranking of collections (which rows to show at what position on this user's home screen).
+
+```sql
+CREATE TABLE user_collections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    collection_id UUID NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    rank INTEGER NOT NULL,  -- Row position on home screen (1 = top)
+    personalization_score DECIMAL(6,5),  -- 0-1 confidence this user will like this row
+    shown_at TIMESTAMP WITH TIME ZONE,  -- Last time actually rendered
+    clicked_count INTEGER NOT NULL DEFAULT 0,  -- Engagement tracking
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT user_collections_user_collection_unique UNIQUE (user_id, collection_id),
+    CONSTRAINT user_collections_rank_positive CHECK (rank > 0),
+    CONSTRAINT user_collections_score_range CHECK (personalization_score BETWEEN 0 AND 1 OR personalization_score IS NULL)
+);
+
+CREATE INDEX idx_user_collections_user_rank ON user_collections(user_id, rank);
+CREATE INDEX idx_user_collections_collection ON user_collections(collection_id);
+```
+
+---
+
+### 4.13 Reading Progress Table 🆕 (Week 3)
+
+**Purpose:** Track user's reading position for free content (EPUB books + comics). Feeds "Continue Reading" row.
+
+```sql
+CREATE TABLE reading_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    book_id UUID REFERENCES books(id) ON DELETE CASCADE,
+    comic_id UUID REFERENCES comics(id) ON DELETE CASCADE,
+    content_type content_type_enum NOT NULL,
+
+    -- Progress tracking
+    current_position VARCHAR(500),  -- EPUB CFI or page number
+    current_page INTEGER,
+    total_pages INTEGER,
+    progress_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00,  -- 0.00 to 100.00
+
+    -- Session tracking
+    last_read_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    total_reading_time_seconds INTEGER NOT NULL DEFAULT 0,
+    session_count INTEGER NOT NULL DEFAULT 0,
+
+    -- Completion
+    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT reading_progress_content_ref CHECK (
+        (content_type = 'book' AND book_id IS NOT NULL AND comic_id IS NULL) OR
+        (content_type = 'comic' AND comic_id IS NOT NULL AND book_id IS NULL)
+    ),
+    CONSTRAINT reading_progress_percent_range CHECK (progress_percent BETWEEN 0 AND 100),
+    CONSTRAINT reading_progress_user_book_unique UNIQUE (user_id, book_id),
+    CONSTRAINT reading_progress_user_comic_unique UNIQUE (user_id, comic_id)
+);
+
+COMMENT ON TABLE reading_progress IS 'Tracks user reading position for free content (EPUB + comics)';
+COMMENT ON COLUMN reading_progress.current_position IS 'EPUB CFI location or page number string';
+COMMENT ON COLUMN reading_progress.progress_percent IS 'Percentage read (0-100)';
+
+CREATE INDEX idx_reading_progress_user_id ON reading_progress(user_id);
+CREATE INDEX idx_reading_progress_user_last_read ON reading_progress(user_id, last_read_at DESC);
+CREATE INDEX idx_reading_progress_book_id ON reading_progress(book_id) WHERE book_id IS NOT NULL;
+CREATE INDEX idx_reading_progress_comic_id ON reading_progress(comic_id) WHERE comic_id IS NOT NULL;
+CREATE INDEX idx_reading_progress_incomplete ON reading_progress(user_id, is_completed) WHERE is_completed = FALSE;
+```
+
+---
+
+### 4.14 Series Metadata Table 🆕 (Week 3)
+
+**Purpose:** Cache computed series reading order data. Avoids recomputing series structure every time user visits a book/comic.
+
+```sql
+CREATE TABLE series_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    series_name VARCHAR(300) NOT NULL,
+    content_type content_type_enum NOT NULL,
+
+    -- Ordered items (denormalized for fast reads)
+    ordered_items_json JSONB NOT NULL DEFAULT '[]',
+    -- Example:
+    -- [
+    --   {"id": "uuid1", "title": "Dune", "order": 1, "label": "Start Here"},
+    --   {"id": "uuid2", "title": "Dune Messiah", "order": 2, "label": null},
+    --   ...
+    -- ]
+
+    -- Related series (prequels, spinoffs)
+    companion_series_json JSONB DEFAULT '[]',
+    -- Example:
+    -- [
+    --   {
+    --     "name": "Prequel Series by Brian Herbert",
+    --     "entries": [...],
+    --     "tip": "Read after Book 1 or after all 6 originals."
+    --   }
+    -- ]
+
+    -- Contextual tip for readers
+    tip TEXT,
+
+    -- Metadata
+    total_items INTEGER NOT NULL DEFAULT 0,
+    is_complete BOOLEAN NOT NULL DEFAULT FALSE,  -- Is the series finished?
+
+    -- Cache management
+    generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '7 days'),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT series_metadata_name_type_unique UNIQUE (series_name, content_type),
+    CONSTRAINT series_metadata_total_positive CHECK (total_items >= 0)
+);
+
+COMMENT ON TABLE series_metadata IS 'Cached reading order data for series (Series Intelligence output)';
+COMMENT ON COLUMN series_metadata.ordered_items_json IS 'Full series in reading order with labels';
+COMMENT ON COLUMN series_metadata.companion_series_json IS 'Prequel/spinoff series data';
+
+CREATE INDEX idx_series_metadata_name ON series_metadata(series_name);
+CREATE INDEX idx_series_metadata_content_type ON series_metadata(content_type);
+CREATE INDEX idx_series_metadata_expires ON series_metadata(expires_at);
+```
+
+---
+
 ## 📋 Enumerations
 
-### Library Status Enum
+### All Enums Summary
 
-```sql
-CREATE TYPE library_status_enum AS ENUM (
-    'want_to_read',
-    'currently_reading',
-    'read',
-    'dnf'
-);
-```
-
-| Value | Description |
-|-------|-------------|
-| `want_to_read` | User wants to read (default) |
-| `currently_reading` | Actively reading |
-| `read` | Finished |
-| `dnf` | Did Not Finish |
-
-### Recommendation Model Enum
-
-```sql
-CREATE TYPE recommendation_model_enum AS ENUM (
-    'content_based',
-    'collaborative_knn',
-    'neural_cf',
-    'hybrid',
-    'trending',
-    'popular'
-);
-```
-
-| Value | Description |
-|-------|-------------|
-| `content_based` | TF-IDF similarity-based |
-| `collaborative_knn` | KNN user-based CF |
-| `neural_cf` | Keras neural recommender |
-| `hybrid` | Weighted combination |
-| `trending` | NYT bestsellers |
-| `popular` | Popularity-based fallback |
-
-### External Source Enum (Book Source)
-
-Used as VARCHAR (not strict enum for extensibility):
-- `google_books` — Google Books API
-- `open_library` — Open Library
-- `nyt_books` — NYT API
-- `manual` — Manually added
+| Enum | Values | Used In |
+|------|--------|---------|
+| `library_status_enum` | `want_to_read`, `currently_reading`, `read`, `dnf` | library_items, comic_library_items |
+| `recommendation_model_enum` | `content_based`, `collaborative_knn`, `neural_cf`, `hybrid`, `trending`, `popular` | recommendations |
+| `content_type_enum` 🆕 | `book`, `comic` | recommendations, reading_progress, series_metadata |
+| `content_preference_enum` 🆕 | `books`, `comics`, `both` | user_preferences |
+| `collection_type_enum` 🆕 | `personalized`, `mood`, `utility`, `trending`, `free_reading`, `series`, `author`, `genre` | collections |
 
 ---
 
 ## 🚀 Indexes & Performance
 
-### Index Strategy
-
-| Table | Index | Purpose | Type |
-|-------|-------|---------|------|
-| `users` | `idx_users_email` | Login lookup | B-tree UNIQUE |
-| `users` | `idx_users_created_at` | Analytics | B-tree |
-| `books` | `idx_books_external` | Cache lookup | B-tree UNIQUE |
-| `books` | `idx_books_isbn_13` | ISBN search | B-tree |
-| `books` | `idx_books_title_gin` | Full-text search | GIN |
-| `books` | `idx_books_authors_gin` | Array search | GIN |
-| `books` | `idx_books_genres_gin` | Genre filtering | GIN |
-| `ratings` | `idx_ratings_user_book` | User's rating lookup | B-tree |
-| `ratings` | `idx_ratings_book_id` | Book's ratings | B-tree |
-| `library` | `idx_library_user_status` | Filter by status | Composite |
-| `recommendations` | `idx_recommendations_user_score` | Fetch top recs | B-tree DESC |
-
-### Query Performance Targets
+### New Query Performance Targets (v2.0)
 
 | Query | Target | Index Used |
 |-------|--------|-----------|
-| User login by email | < 5ms | `idx_users_email` |
-| Book by external_id | < 5ms | `idx_books_external` |
-| User's ratings | < 20ms | `idx_ratings_user_id` |
-| Top 10 recommendations | < 30ms | `idx_recommendations_user_score` |
-| Library filtered by status | < 50ms | `idx_library_user_status` |
-| Full-text book search | < 100ms | `idx_books_title_gin` |
+| User's home collections | < 50ms | `idx_user_collections_user_rank` |
+| Collection items lookup | < 20ms | JSONB read on `collections.items_json` |
+| Series for book/comic | < 10ms | `idx_series_metadata_name` |
+| Continue reading list | < 30ms | `idx_reading_progress_user_last_read` |
+| Free books search | < 100ms | `idx_books_free_online` |
+| Free comics search | < 100ms | `idx_comics_free_online` |
+| Comic series by name | < 50ms | `idx_comics_series` |
+| Comics by character | < 100ms | `idx_comics_characters_gin` |
 
-### Denormalization
+### Trigger for Comic Rating Stats
 
-Some fields are duplicated for performance:
-
-**In `books`:**
-- `average_rating` — Cached, updated via trigger
-- `ratings_count` — Cached count
-
-**Trigger:**
 ```sql
-CREATE OR REPLACE FUNCTION update_book_ratings_stats()
+CREATE OR REPLACE FUNCTION update_comic_ratings_stats()
 RETURNS TRIGGER AS $$
 BEGIN
-    UPDATE books
-    SET 
+    UPDATE comics
+    SET
         kitabee_rating = (
-            SELECT AVG(rating)::DECIMAL(3,2) 
-            FROM ratings 
-            WHERE book_id = NEW.book_id
+            SELECT AVG(rating)::DECIMAL(3,2)
+            FROM comic_ratings
+            WHERE comic_id = COALESCE(NEW.comic_id, OLD.comic_id)
         ),
         kitabee_ratings_count = (
-            SELECT COUNT(*) 
-            FROM ratings 
-            WHERE book_id = NEW.book_id
+            SELECT COUNT(*)
+            FROM comic_ratings
+            WHERE comic_id = COALESCE(NEW.comic_id, OLD.comic_id)
         ),
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = NEW.book_id;
+    WHERE id = COALESCE(NEW.comic_id, OLD.comic_id);
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_comic_ratings
+AFTER INSERT OR UPDATE OR DELETE ON comic_ratings
+FOR EACH ROW EXECUTE FUNCTION update_comic_ratings_stats();
+```
+
+### Trigger for Collection Item Count
+
+```sql
+CREATE OR REPLACE FUNCTION update_collection_item_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.item_count = jsonb_array_length(NEW.items_json);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_update_book_ratings
-AFTER INSERT OR UPDATE OR DELETE ON ratings
-FOR EACH ROW EXECUTE FUNCTION update_book_ratings_stats();
+CREATE TRIGGER trigger_update_collection_count
+BEFORE INSERT OR UPDATE ON collections
+FOR EACH ROW EXECUTE FUNCTION update_collection_item_count();
 ```
-
----
-
-## 🔒 Constraints & Validations
-
-### Referential Integrity
-
-All foreign keys use `ON DELETE CASCADE` to prevent orphaned data:
-- Delete user → Delete their ratings, library, recommendations
-- Delete book → Delete all associated ratings, library entries
-
-### Check Constraints
-
-| Table | Constraint | Rule |
-|-------|-----------|------|
-| `users` | `users_email_format` | Valid email regex |
-| `users` | `users_name_length` | 2-100 chars |
-| `books` | `books_rating_range` | 0 ≤ rating ≤ 5 |
-| `books` | `books_year_valid` | 1000 ≤ year ≤ current+1 |
-| `ratings` | `ratings_value_range` | 1 ≤ rating ≤ 5 |
-| `ratings` | `ratings_review_length` | ≤ 5000 chars |
-| `library` | `library_page_valid` | current ≤ total |
-| `library` | `library_dates_valid` | finished ≥ started |
-| `recommendations` | `recommendations_score_range` | 0 ≤ score ≤ 1 |
-
-### Unique Constraints
-
-| Table | Constraint | Purpose |
-|-------|-----------|---------|
-| `users` | `users_email_unique` | One account per email |
-| `books` | `books_external_unique` | No duplicate books |
-| `ratings` | `ratings_user_book_unique` | One rating per user per book |
-| `library` | `library_user_book_unique` | Book in library once |
-| `user_preferences` | `user_preferences_user_unique` | One prefs row per user |
 
 ---
 
 ## 🐍 API Schemas (Pydantic)
 
-### User Schemas
+### Comic Schemas 🆕
 
 ```python
-# schemas/user.py
-from pydantic import BaseModel, EmailStr, Field, validator
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
-
-
-class UserBase(BaseModel):
-    """Shared user fields."""
-    email: EmailStr
-    name: str = Field(..., min_length=2, max_length=100)
-
-
-class UserCreate(UserBase):
-    """Request schema for user registration."""
-    password: str = Field(..., min_length=8, max_length=100)
-    
-    @validator('password')
-    def password_complexity(cls, v):
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain uppercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain a number')
-        return v
-
-
-class UserLogin(BaseModel):
-    """Request schema for login."""
-    email: EmailStr
-    password: str
-
-
-class UserUpdate(BaseModel):
-    """Request schema for profile update."""
-    name: Optional[str] = Field(None, min_length=2, max_length=100)
-    bio: Optional[str] = Field(None, max_length=500)
-    avatar_url: Optional[str] = None
-    date_of_birth: Optional[str] = None  # ISO date
-
-
-class UserResponse(UserBase):
-    """Response schema (no sensitive fields)."""
-    id: UUID
-    avatar_url: Optional[str] = None
-    bio: Optional[str] = None
-    onboarding_completed: bool
-    email_verified: bool
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True  # Allow ORM model conversion
-
-
-class TokenResponse(BaseModel):
-    """JWT token response."""
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int  # seconds
-    user: UserResponse
-```
-
-### Book Schemas
-
-```python
-# schemas/book.py
-from pydantic import BaseModel, Field, HttpUrl
+# schemas/comic.py
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from decimal import Decimal
 
 
-class BookBase(BaseModel):
-    """Shared book fields."""
+class ComicBase(BaseModel):
     title: str = Field(..., max_length=500)
-    authors: List[str] = Field(..., min_items=1)
+    creators: List[str] = []
+    publisher: Optional[str] = None
     description: Optional[str] = None
     genres: List[str] = []
-    isbn_13: Optional[str] = Field(None, max_length=13)
-    published_year: Optional[int] = Field(None, ge=1000, le=2100)
+    characters: List[str] = []
 
 
-class BookResponse(BookBase):
-    """Public book response."""
+class ComicResponse(ComicBase):
     id: UUID
     external_id: str
     external_source: str
-    subtitle: Optional[str] = None
-    publisher: Optional[str] = None
+    tags: List[str] = []
+    published_year: Optional[int] = None
     page_count: Optional[int] = None
     language: str = "en"
     cover_url: Optional[str] = None
     cover_url_large: Optional[str] = None
-    average_rating: Optional[Decimal] = Field(None, ge=0, le=5)
+    series_name: Optional[str] = None
+    issue_number: Optional[int] = None
+    volume_number: Optional[int] = None
+    series_entry_type: Optional[str] = None
+    average_rating: Optional[Decimal] = None
     ratings_count: int = 0
     kitabee_rating: Optional[Decimal] = None
     kitabee_ratings_count: int = 0
+    is_free_online: bool = False
+    internet_archive_id: Optional[str] = None
+    mood_tags: List[str] = []
     metadata: Dict[str, Any] = {}
-    
+
     class Config:
         from_attributes = True
 
 
-class BookSearchQuery(BaseModel):
-    """Search query params."""
+class ComicSearchQuery(BaseModel):
     q: str = Field(..., min_length=2, max_length=200)
     limit: int = Field(20, ge=1, le=40)
     offset: int = Field(0, ge=0)
-    genre: Optional[str] = None
-    language: str = "en"
+    publisher: Optional[str] = None
+    character: Optional[str] = None
+    free_only: bool = False
 
 
-class BookSearchResponse(BaseModel):
-    """Paginated search results."""
+class ComicSearchResponse(BaseModel):
     query: str
     total_count: int
     limit: int
     offset: int
-    results: List[BookResponse]
+    results: List[ComicResponse]
 ```
 
-### Rating Schemas
+### Collection Schemas 🆕
 
 ```python
-# schemas/rating.py
-from pydantic import BaseModel, Field, validator
+# schemas/collection.py
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any, Literal
 from uuid import UUID
 
 
-class RatingCreate(BaseModel):
-    """Request to create/update rating."""
-    book_id: UUID
-    rating: int = Field(..., ge=1, le=5)
-    review_text: Optional[str] = Field(None, max_length=5000)
-    review_title: Optional[str] = Field(None, max_length=200)
-    is_spoiler: bool = False
-
-
-class RatingResponse(BaseModel):
-    """Rating response."""
+class CollectionItem(BaseModel):
+    """Single item in a collection row."""
+    content_type: Literal["book", "comic"]
     id: UUID
-    user_id: UUID
-    book_id: UUID
-    rating: int
-    review_text: Optional[str] = None
-    review_title: Optional[str] = None
-    is_spoiler: bool
-    helpful_count: int
-    created_at: datetime
-    updated_at: datetime
-    
+    position: int
+    title: str
+    cover_url: Optional[str] = None
+    is_free_online: bool = False
+    kitabee_rating: Optional[float] = None
+
+
+class CollectionResponse(BaseModel):
+    id: UUID
+    name: str
+    title: str  # Catchy display title
+    description: Optional[str] = None
+    collection_type: str
+    content_type: str  # 'books' | 'comics' | 'mixed'
+    mood: Optional[str] = None
+    items: List[CollectionItem]
+    item_count: int
+    based_on_book_id: Optional[UUID] = None
+    based_on_author: Optional[str] = None
+    generated_at: datetime
+
     class Config:
         from_attributes = True
 
 
-class RatingWithBook(RatingResponse):
-    """Rating with embedded book info."""
-    book: 'BookResponse'  # Forward reference
-```
-
-### Library Schemas
-
-```python
-# schemas/library.py
-from pydantic import BaseModel, Field
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
-from enum import Enum
-
-
-class LibraryStatus(str, Enum):
-    WANT_TO_READ = "want_to_read"
-    CURRENTLY_READING = "currently_reading"
-    READ = "read"
-    DNF = "dnf"
-
-
-class LibraryEntryCreate(BaseModel):
-    book_id: UUID
-    status: LibraryStatus = LibraryStatus.WANT_TO_READ
-    notes: Optional[str] = None
-
-
-class LibraryEntryUpdate(BaseModel):
-    status: Optional[LibraryStatus] = None
-    current_page: Optional[int] = Field(None, ge=0)
-    notes: Optional[str] = None
-    is_favorite: Optional[bool] = None
-
-
-class LibraryEntryResponse(BaseModel):
-    id: UUID
+class HomeCollectionsResponse(BaseModel):
+    """Response for GET /api/v1/collections (home screen)."""
     user_id: UUID
-    book_id: UUID
-    status: LibraryStatus
-    current_page: int
-    total_pages: Optional[int] = None
-    started_reading_at: Optional[datetime] = None
-    finished_reading_at: Optional[datetime] = None
-    notes: Optional[str] = None
-    is_favorite: bool
-    added_at: datetime
-    updated_at: datetime
-    book: Optional['BookResponse'] = None
-    
-    class Config:
-        from_attributes = True
+    generated_at: datetime
+    total_collections: int
+    collections: List[CollectionResponse]
+    continue_reading: Optional[List[CollectionItem]] = None
 ```
 
-### Recommendation Schemas
+### Series Schemas 🆕
 
 ```python
-# schemas/recommendation.py
+# schemas/series.py
+from pydantic import BaseModel
+from typing import Optional, List, Literal
+from uuid import UUID
+
+
+class SeriesEntry(BaseModel):
+    id: UUID
+    title: str
+    order: int
+    label: Optional[str] = None  # "Start Here" | "Prequel" | "Spinoff" | None
+    cover_url: Optional[str] = None
+
+
+class CompanionSeries(BaseModel):
+    name: str
+    entries: List[SeriesEntry]
+    tip: Optional[str] = None
+
+
+class OrderedSeriesResponse(BaseModel):
+    series_name: str
+    content_type: Literal["book", "comic"]
+    total_items: int
+    is_complete: bool
+    main_series: List[SeriesEntry]
+    companion_series: List[CompanionSeries] = []
+    tip: Optional[str] = None
+    generated_at: str
+```
+
+### Reading Progress Schemas 🆕
+
+```python
+# schemas/reading_progress.py
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, Literal
 from uuid import UUID
 from decimal import Decimal
-from enum import Enum
 
 
-class ModelType(str, Enum):
-    CONTENT_BASED = "content_based"
-    COLLABORATIVE_KNN = "collaborative_knn"
-    NEURAL_CF = "neural_cf"
-    HYBRID = "hybrid"
-    TRENDING = "trending"
-    POPULAR = "popular"
+class ReadingProgressUpdate(BaseModel):
+    current_position: Optional[str] = None
+    current_page: Optional[int] = Field(None, ge=0)
+    total_pages: Optional[int] = Field(None, ge=1)
+    progress_percent: Decimal = Field(..., ge=0, le=100)
+    session_time_seconds: int = Field(0, ge=0)
 
 
-class RecommendationResponse(BaseModel):
+class ReadingProgressResponse(BaseModel):
     id: UUID
     user_id: UUID
-    book_id: UUID
-    score: Decimal = Field(..., ge=0, le=1)
-    rank: int
-    model_type: ModelType
-    explanation: Optional[str] = None
-    metadata: Dict[str, Any] = {}
-    generated_at: datetime
-    book: Optional['BookResponse'] = None
+    book_id: Optional[UUID] = None
+    comic_id: Optional[UUID] = None
+    content_type: Literal["book", "comic"]
+    current_position: Optional[str] = None
+    current_page: Optional[int] = None
+    total_pages: Optional[int] = None
+    progress_percent: Decimal
+    last_read_at: datetime
+    total_reading_time_seconds: int
+    session_count: int
+    is_completed: bool
+    completed_at: Optional[datetime] = None
 
-
-class RecommendationListResponse(BaseModel):
-    user_id: UUID
-    generated_at: datetime
-    total_count: int
-    recommendations: List[RecommendationResponse]
-```
-
-### Standard Response Wrapper
-
-```python
-# schemas/common.py
-from pydantic import BaseModel
-from typing import Optional, Any, Generic, TypeVar
-from datetime import datetime
-
-T = TypeVar('T')
-
-
-class SuccessResponse(BaseModel, Generic[T]):
-    """Standard success response."""
-    success: bool = True
-    data: T
-    meta: dict = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "v1"
-    }
-
-
-class ErrorDetail(BaseModel):
-    code: str
-    message: str
-    details: Optional[dict] = None
-
-
-class ErrorResponse(BaseModel):
-    """Standard error response."""
-    success: bool = False
-    error: ErrorDetail
-    meta: dict = {
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-
-class PaginationMeta(BaseModel):
-    total: int
-    limit: int
-    offset: int
-    has_more: bool
+    class Config:
+        from_attributes = True
 ```
 
 ---
 
 ## 📘 Frontend Types (TypeScript)
 
-### User Types
+### Comic Types 🆕
 
 ```typescript
-// types/user.ts
+// types/comic.ts
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl?: string;
-  bio?: string;
-  dateOfBirth?: string;
-  onboardingCompleted: boolean;
-  emailVerified: boolean;
-  createdAt: string;
-}
-
-export interface UserCredentials {
-  email: string;
-  password: string;
-}
-
-export interface UserRegistration extends UserCredentials {
-  name: string;
-}
-
-export interface UserUpdate {
-  name?: string;
-  bio?: string;
-  avatarUrl?: string;
-  dateOfBirth?: string;
-}
-
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: 'bearer';
-  expiresIn: number;
-  user: User;
-}
-```
-
-### Book Types
-
-```typescript
-// types/book.ts
-
-export interface Book {
+export interface Comic {
   id: string;
   externalId: string;
   externalSource: string;
   title: string;
-  subtitle?: string;
-  authors: string[];
+  creators: string[];
+  publisher?: string;
   description?: string;
   genres: string[];
+  characters: string[];
   tags?: string[];
-  isbn10?: string;
-  isbn13?: string;
   publishedYear?: number;
-  publisher?: string;
   pageCount?: number;
   language: string;
   coverUrl?: string;
   coverUrlLarge?: string;
+  seriesName?: string;
+  issueNumber?: number;
+  volumeNumber?: number;
+  seriesEntryType?: 'main' | 'annual' | 'oneshot' | 'special';
   averageRating: number;
   ratingsCount: number;
   kitabeeRating?: number;
   kitabeeRatingsCount: number;
+  isFreeOnline: boolean;
+  internetArchiveId?: string;
+  moodTags: string[];
   metadata: Record<string, any>;
 }
+```
 
-export interface BookSearchParams {
-  q: string;
-  limit?: number;
-  offset?: number;
-  genre?: string;
-  language?: string;
+### Collection Types 🆕
+
+```typescript
+// types/collection.ts
+
+export type CollectionType =
+  | 'personalized'
+  | 'mood'
+  | 'utility'
+  | 'trending'
+  | 'free_reading'
+  | 'series'
+  | 'author'
+  | 'genre';
+
+export type ContentType = 'book' | 'comic';
+
+export interface CollectionItem {
+  contentType: ContentType;
+  id: string;
+  position: number;
+  title: string;
+  coverUrl?: string;
+  isFreeOnline: boolean;
+  kitabeeRating?: number;
 }
 
-export interface BookSearchResults {
-  query: string;
-  totalCount: number;
-  limit: number;
-  offset: number;
-  results: Book[];
+export interface Collection {
+  id: string;
+  name: string;
+  title: string;
+  description?: string;
+  collectionType: CollectionType;
+  contentType: 'books' | 'comics' | 'mixed';
+  mood?: string;
+  items: CollectionItem[];
+  itemCount: number;
+  basedOnBookId?: string;
+  basedOnAuthor?: string;
+  generatedAt: string;
+}
+
+export interface HomeCollections {
+  userId: string;
+  generatedAt: string;
+  totalCollections: number;
+  collections: Collection[];
+  continueReading?: CollectionItem[];
 }
 ```
 
-### Rating Types
+### Series Types 🆕
 
 ```typescript
-// types/rating.ts
+// types/series.ts
 
-export interface Rating {
+export interface SeriesEntry {
   id: string;
-  userId: string;
-  bookId: string;
-  rating: number; // 1-5
-  reviewText?: string;
-  reviewTitle?: string;
-  isSpoiler: boolean;
-  helpfulCount: number;
-  createdAt: string;
-  updatedAt: string;
+  title: string;
+  order: number;
+  label?: 'Start Here' | 'Prequel' | 'Spinoff' | null;
+  coverUrl?: string;
 }
 
-export interface RatingWithBook extends Rating {
-  book: Book;
+export interface CompanionSeries {
+  name: string;
+  entries: SeriesEntry[];
+  tip?: string;
 }
 
-export interface CreateRatingInput {
-  bookId: string;
-  rating: number;
-  reviewText?: string;
-  reviewTitle?: string;
-  isSpoiler?: boolean;
+export interface OrderedSeries {
+  seriesName: string;
+  contentType: ContentType;
+  totalItems: number;
+  isComplete: boolean;
+  mainSeries: SeriesEntry[];
+  companionSeries: CompanionSeries[];
+  tip?: string;
+  generatedAt: string;
 }
 ```
 
-### Library Types
+### Reading Progress Types 🆕
 
 ```typescript
-// types/library.ts
+// types/reading.ts
 
-export type LibraryStatus = 'want_to_read' | 'currently_reading' | 'read' | 'dnf';
-
-export interface LibraryEntry {
+export interface ReadingProgress {
   id: string;
   userId: string;
-  bookId: string;
-  status: LibraryStatus;
-  currentPage: number;
-  totalPages?: number;
-  startedReadingAt?: string;
-  finishedReadingAt?: string;
-  notes?: string;
-  isFavorite: boolean;
-  addedAt: string;
-  updatedAt: string;
-  book?: Book;
-}
-
-export interface AddToLibraryInput {
-  bookId: string;
-  status?: LibraryStatus;
-  notes?: string;
-}
-
-export interface UpdateLibraryInput {
-  status?: LibraryStatus;
+  bookId?: string;
+  comicId?: string;
+  contentType: ContentType;
+  currentPosition?: string;
   currentPage?: number;
-  notes?: string;
-  isFavorite?: boolean;
-}
-```
-
-### Recommendation Types
-
-```typescript
-// types/recommendation.ts
-
-export type ModelType = 
-  | 'content_based' 
-  | 'collaborative_knn' 
-  | 'neural_cf' 
-  | 'hybrid' 
-  | 'trending' 
-  | 'popular';
-
-export interface Recommendation {
-  id: string;
-  userId: string;
-  bookId: string;
-  score: number; // 0-1
-  rank: number;
-  modelType: ModelType;
-  explanation?: string;
-  metadata: Record<string, any>;
-  generatedAt: string;
-  book?: Book;
-}
-
-export interface RecommendationList {
-  userId: string;
-  generatedAt: string;
-  totalCount: number;
-  recommendations: Recommendation[];
-}
-```
-
-### API Response Types
-
-```typescript
-// types/api.ts
-
-export interface SuccessResponse<T> {
-  success: true;
-  data: T;
-  meta: {
-    timestamp: string;
-    version: string;
-  };
-}
-
-export interface ErrorResponse {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, any>;
-  };
-  meta: {
-    timestamp: string;
-  };
-}
-
-export type ApiResponse<T> = SuccessResponse<T> | ErrorResponse;
-
-export interface PaginationMeta {
-  total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
+  totalPages?: number;
+  progressPercent: number;
+  lastReadAt: string;
+  totalReadingTimeSeconds: number;
+  sessionCount: number;
+  isCompleted: boolean;
+  completedAt?: string;
 }
 ```
 
@@ -1385,415 +1326,272 @@ export interface PaginationMeta {
 ## 🌐 External API Response Schemas
 
 ### Google Books API
+*[Unchanged from v1.0]*
 
-**Endpoint:** `GET https://www.googleapis.com/books/v1/volumes?q={query}`
+### Comic Vine API 🆕
 
-**Response Schema:**
+**Endpoint:** `GET https://comicvine.gamespot.com/api/volumes/?api_key={key}&filter=name:{query}&format=json`
+
 ```typescript
-interface GoogleBooksSearchResponse {
-  kind: 'books#volumes';
-  totalItems: number;
-  items?: GoogleBook[];
+interface ComicVineResponse {
+  error: 'OK' | string;
+  limit: number;
+  offset: number;
+  number_of_page_results: number;
+  number_of_total_results: number;
+  status_code: number;
+  results: ComicVineVolume[];
 }
 
-interface GoogleBook {
-  kind: 'books#volume';
-  id: string;
-  etag: string;
-  selfLink: string;
-  volumeInfo: {
-    title: string;
-    subtitle?: string;
-    authors?: string[];
-    publisher?: string;
-    publishedDate?: string;
-    description?: string;
-    industryIdentifiers?: Array<{
-      type: 'ISBN_10' | 'ISBN_13' | 'OTHER';
-      identifier: string;
-    }>;
-    pageCount?: number;
-    categories?: string[];
-    averageRating?: number;
-    ratingsCount?: number;
-    imageLinks?: {
-      smallThumbnail?: string;
-      thumbnail?: string;
-      small?: string;
-      medium?: string;
-      large?: string;
-      extraLarge?: string;
-    };
-    language?: string;
-    previewLink?: string;
-    infoLink?: string;
-    canonicalVolumeLink?: string;
+interface ComicVineVolume {
+  id: number;
+  name: string;
+  description?: string;  // HTML
+  publisher?: {
+    id: number;
+    name: string;
   };
-  saleInfo?: {
-    country: string;
-    saleability: string;
+  start_year?: string;
+  count_of_issues?: number;
+  image?: {
+    icon_url: string;
+    medium_url: string;
+    original_url: string;
   };
-  accessInfo?: {
-    country: string;
-    viewability: string;
-  };
+  characters?: Array<{ id: number; name: string }>;
+  api_detail_url: string;
 }
 ```
 
-### Open Library API
+### Internet Archive API 🆕
 
-**Endpoint:** `GET https://openlibrary.org/search.json?q={query}`
+**Search Endpoint:** `GET https://archive.org/advancedsearch.php?q={query}+AND+mediatype:texts&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=description&fl[]=year&output=json`
 
-**Response Schema:**
 ```typescript
-interface OpenLibrarySearchResponse {
-  numFound: number;
-  start: number;
-  numFoundExact: boolean;
-  docs: OpenLibraryDoc[];
+interface InternetArchiveSearchResponse {
+  responseHeader: {
+    status: number;
+    QTime: number;
+    params: Record<string, any>;
+  };
+  response: {
+    numFound: number;
+    start: number;
+    docs: InternetArchiveDoc[];
+  };
 }
 
-interface OpenLibraryDoc {
-  key: string; // e.g., "/works/OL45804W"
-  title: string;
-  author_name?: string[];
-  author_key?: string[];
-  first_publish_year?: number;
-  isbn?: string[];
-  cover_i?: number; // Use for image URL
-  edition_count?: number;
-  language?: string[];
+interface InternetArchiveDoc {
+  identifier: string;
+  title?: string;
+  creator?: string | string[];
+  description?: string | string[];
+  year?: string;
+  language?: string | string[];
+  mediatype: string;
+  collection?: string[];
   subject?: string[];
-  publisher?: string[];
 }
 ```
 
-**Cover URL Pattern:**
-```
-https://covers.openlibrary.org/b/id/{cover_i}-L.jpg  (Large)
-https://covers.openlibrary.org/b/id/{cover_i}-M.jpg  (Medium)
-https://covers.openlibrary.org/b/id/{cover_i}-S.jpg  (Small)
-```
+**Metadata Endpoint:** `GET https://archive.org/metadata/{identifier}`
 
-### NYT Books API
-
-**Endpoint:** `GET https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=...`
-
-**Response Schema:**
-```typescript
-interface NYTBooksResponse {
-  status: 'OK';
-  copyright: string;
-  num_results: number;
-  results: {
-    list_name: string;
-    bestsellers_date: string;
-    published_date: string;
-    books: NYTBook[];
-  };
-}
-
-interface NYTBook {
-  rank: number;
-  weeks_on_list: number;
-  primary_isbn10: string;
-  primary_isbn13: string;
-  publisher: string;
-  description: string;
-  title: string;
-  author: string;
-  contributor: string;
-  book_image: string;
-  amazon_product_url: string;
-}
-```
+Returns file listing including EPUB, PDF, image files for reading.
 
 ---
 
 ## 💾 Redis Cache Schemas
 
-### Cache Key Patterns
-
-**Format:** `<namespace>:<entity>:<identifier>[:<sub-key>]`
+### New Cache Keys in v2.0
 
 | Key Pattern | Value Type | TTL | Purpose |
 |-------------|-----------|-----|---------|
-| `book:{book_id}` | JSON (Book) | 24h | Book details cache |
-| `book:external:{source}:{ext_id}` | JSON (Book) | 24h | External book lookup |
-| `search:{normalized_query}` | JSON (BookList) | 30m | Search results |
-| `search:{normalized_query}:{page}` | JSON (BookList) | 30m | Paginated search |
-| `recs:user:{user_id}` | JSON (RecList) | 1h | User recommendations |
-| `recs:user:{user_id}:{model}` | JSON (RecList) | 1h | Model-specific recs |
-| `trending:{list_name}` | JSON (BookList) | 7d | NYT bestsellers |
-| `user:session:{token_hash}` | JSON (Session) | 24h | Session data |
-| `rate_limit:{ip}:{endpoint}` | Integer | 1m | Rate limit counter |
-| `user:library:{user_id}` | JSON (List) | 5m | User's library cache |
+| `comic:{comic_id}` | JSON (Comic) | 24h | Comic details cache |
+| `comic:external:{source}:{ext_id}` | JSON (Comic) | 24h | External comic lookup |
+| `search:comics:{query}` | JSON (ComicList) | 30m | Comic search results |
+| `search:all:{query}` | JSON (Mixed) | 30m | Unified search |
+| `collections:home:{user_id}` | JSON (HomeCollections) | 6h | User's home screen |
+| `collection:{collection_id}` | JSON (Collection) | 6h | Individual collection |
+| `series:{name}:{content_type}` | JSON (OrderedSeries) | 7d | Series order data |
+| `ia:reading_links:{identifier}` | JSON (Links) | 24h | Internet Archive URLs |
+| `reading_progress:{user_id}` | JSON (List) | 5m | Continue reading list |
 
-### Redis Data Examples
-
-**Book Cache:**
-```
-Key: book:550e8400-e29b-41d4-a716-446655440000
-Type: String (JSON)
-TTL: 86400 (24 hours)
-Value: {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "title": "Sapiens",
-  "authors": ["Yuval Noah Harari"],
-  ...
-}
-```
-
-**Search Cache:**
-```
-Key: search:sapiens
-Type: String (JSON)
-TTL: 1800 (30 minutes)
-Value: {
-  "query": "sapiens",
-  "totalCount": 42,
-  "results": [...]
-}
-```
-
-**Rate Limit:**
-```
-Key: rate_limit:192.168.1.1:/api/v1/search
-Type: Integer
-TTL: 60
-Value: 15  # Number of requests in current minute
-```
-
-### Cache Invalidation Events
+### Cache Invalidation Events (Updated)
 
 | Event | Keys Invalidated |
 |-------|------------------|
-| New rating | `recs:user:{user_id}*`, `user:library:{user_id}` |
-| Book update | `book:{book_id}`, `book:external:*` (if match) |
-| User update | `user:session:{token}` |
-| Trending refresh | `trending:*` |
+| New book rating | `recs:user:{user_id}*`, `collections:home:{user_id}` |
+| New comic rating | `recs:user:{user_id}*`, `collections:home:{user_id}` |
+| Book/comic added to library | `collections:home:{user_id}` |
+| Reading progress update | `reading_progress:{user_id}`, `collections:home:{user_id}` |
+| Preferences update | `collections:home:{user_id}` |
 
 ---
 
 ## 🤖 ML Feature Schemas
 
-### Content-Based Features (TF-IDF Input)
+### Collection Engine Schemas 🆕
 
 ```python
-# ml/schemas.py
-from pydantic import BaseModel
-from typing import List, Dict
+class ContentVector(BaseModel):
+    """Vectorized representation of book or comic."""
+    content_id: str
+    content_type: Literal["book", "comic"]
+    text_content: str  # title + description + genres + tags
+    vector: Dict[int, float]  # TF-IDF sparse vector
 
 
-class BookFeatureVector(BaseModel):
-    """Book representation for content-based ML."""
-    book_id: str
-    text_content: str  # Combined: title + authors + description + genres
-    genres: List[str]
-    published_year: int
-    language: str
-    
-
-class TFIDFVector(BaseModel):
-    """Sparse TF-IDF vector."""
-    book_id: str
-    vector: Dict[int, float]  # {feature_index: tfidf_score}
-    magnitude: float  # For cosine similarity
-```
-
-### Collaborative Filtering Features (KNN Input)
-
-```python
-class UserItemInteraction(BaseModel):
-    """One user-book interaction."""
-    user_id: str
-    book_id: str
-    rating: float  # Normalized to 0-1
-    timestamp: str
-
-
-class UserRatingVector(BaseModel):
-    """User's rating history as sparse vector."""
-    user_id: str
-    ratings: Dict[str, float]  # {book_id: rating}
-    mean_rating: float
-    rating_count: int
-```
-
-### Neural Recommender Features
-
-```python
-class NeuralCFInput(BaseModel):
-    """Input to neural collaborative filter."""
-    user_id: str
-    book_id: str
-    user_embedding: List[float]  # 50-dim vector
-    book_embedding: List[float]  # 50-dim vector
-
-
-class NeuralCFOutput(BaseModel):
-    """Predicted rating."""
-    user_id: str
-    book_id: str
-    predicted_rating: float  # 0-1 (sigmoid output)
-    confidence: float
-```
-
-### User Clustering Features
-
-```python
-class UserClusterFeatures(BaseModel):
-    """Features for KMeans user clustering."""
-    user_id: str
-    avg_rating: float
-    rating_count: int
-    genre_distribution: Dict[str, float]  # {"fiction": 0.4, ...}
-    reading_pace: float  # books per month
-    diversity_score: float  # 0-1
-    
-
-class UserCluster(BaseModel):
-    """Cluster assignment."""
-    user_id: str
-    cluster_id: int  # 0-9 (K=10 clusters)
-    cluster_label: str  # e.g., "Contemplative Explorer"
+class ClusterAssignment(BaseModel):
+    """KMeans cluster output."""
+    content_id: str
+    cluster_id: int
     distance_to_center: float
+
+
+class MoodDetection(BaseModel):
+    """Mood detection output for a piece of content."""
+    content_id: str
+    primary_mood: str  # 'dark', 'funny', 'epic', etc.
+    mood_scores: Dict[str, float]  # {mood: confidence}
+    confidence: float
+
+
+class GeneratedCollection(BaseModel):
+    """Output of collection engine."""
+    name: str
+    title: str  # Catchy title
+    description: Optional[str] = None
+    collection_type: str
+    content_type: str
+    mood: Optional[str] = None
+    items: List[str]  # content_ids in order
+    based_on: Optional[Dict[str, Any]] = None
 ```
 
-### Sentiment Analysis Schema
+### Series Intelligence Schemas 🆕
 
 ```python
-class SentimentInput(BaseModel):
-    """Text to analyze."""
-    text: str
-    text_type: str  # 'review', 'description'
-
-
-class SentimentOutput(BaseModel):
-    """Sentiment analysis result."""
-    polarity: float  # -1 to 1
-    subjectivity: float  # 0 to 1
-    sentiment_label: str  # 'positive', 'neutral', 'negative'
+class SeriesInfo(BaseModel):
+    """Detected series membership."""
+    series_name: str
+    entry_type: Literal["main", "prequel", "spinoff", "companion"]
+    volume_number: Optional[int] = None
     confidence: float
-    top_emotions: List[str]  # ['joyful', 'thoughtful']
+
+
+class OrderedSeriesOutput(BaseModel):
+    """Series builder output."""
+    series_name: str
+    content_type: str
+    main_series: List[Dict[str, Any]]
+    companion_series: List[Dict[str, Any]]
+    tip: Optional[str] = None
 ```
 
 ---
 
 ## 📝 Sample Data
 
-### Sample User
+### Sample Comic 🆕
 
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "email": "priya@example.com",
-  "password_hash": "$2b$12$KIXxPfnK...",
-  "name": "Priya Sharma",
-  "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=priya",
-  "bio": "Avid reader, tea enthusiast",
-  "onboarding_completed": true,
-  "is_active": true,
-  "email_verified": false,
-  "last_login_at": "2025-01-15T10:30:00Z",
-  "created_at": "2025-01-10T14:22:00Z",
-  "updated_at": "2025-01-15T10:30:00Z"
-}
-```
-
-### Sample Book
-
-```json
-{
-  "id": "660e8400-e29b-41d4-a716-446655440001",
-  "external_id": "FmyBAwAAQBAJ",
-  "external_source": "google_books",
-  "title": "Sapiens",
-  "subtitle": "A Brief History of Humankind",
-  "authors": ["Yuval Noah Harari"],
-  "description": "From a renowned historian comes a groundbreaking narrative of humanity's creation and evolution...",
-  "genres": ["Non-fiction", "History", "Anthropology", "Science"],
-  "tags": ["philosophy", "evolution"],
-  "isbn_10": "0062316095",
-  "isbn_13": "9780062316097",
-  "published_year": 2014,
-  "publisher": "Harper",
-  "page_count": 464,
+  "id": "cc0e8400-e29b-41d4-a716-446655440006",
+  "external_id": "4050-42165",
+  "external_source": "comic_vine",
+  "title": "Batman: Year One",
+  "creators": ["Frank Miller", "David Mazzucchelli"],
+  "publisher": "DC Comics",
+  "description": "Bruce Wayne returns to Gotham City after a 12-year absence to begin his crusade against crime...",
+  "genres": ["Superhero", "Crime", "Drama"],
+  "characters": ["Batman", "Bruce Wayne", "James Gordon", "Selina Kyle"],
+  "published_year": 1987,
+  "page_count": 104,
   "language": "en",
-  "cover_url": "https://books.google.com/books/content?id=FmyBAwAAQBAJ&printsec=frontcover&img=1&zoom=1",
-  "cover_url_large": "https://books.google.com/books/content?id=FmyBAwAAQBAJ&printsec=frontcover&img=1&zoom=2",
-  "average_rating": 4.5,
-  "ratings_count": 15234,
-  "kitabee_rating": 4.6,
-  "kitabee_ratings_count": 42,
-  "metadata": {
-    "google_books": {
-      "preview_link": "https://books.google.com/books?id=FmyBAwAAQBAJ",
-      "info_link": "https://books.google.com/books?id=FmyBAwAAQBAJ"
+  "cover_url": "https://comicvine.gamespot.com/a/uploads/original/...",
+  "series_name": "Batman",
+  "issue_number": 1,
+  "volume_number": 1,
+  "series_entry_type": "main",
+  "kitabee_rating": 4.8,
+  "kitabee_ratings_count": 156,
+  "is_free_online": false,
+  "mood_tags": ["dark", "gritty", "noir"],
+  "cached_at": "2025-01-20T10:00:00Z"
+}
+```
+
+### Sample Collection 🆕
+
+```json
+{
+  "id": "dd0e8400-e29b-41d4-a716-446655440007",
+  "name": "epic_fantasy_cluster_3",
+  "title": "Epic Worlds Built From Scratch",
+  "description": "Immersive fantasy worlds you can lose yourself in for weeks",
+  "collection_type": "mood",
+  "content_type": "books",
+  "mood": "epic",
+  "items_json": [
+    {"content_type": "book", "id": "uuid-dune", "position": 1, "title": "Dune", "cover_url": "..."},
+    {"content_type": "book", "id": "uuid-wot", "position": 2, "title": "The Eye of the World", "cover_url": "..."},
+    {"content_type": "book", "id": "uuid-notw", "position": 3, "title": "The Name of the Wind", "cover_url": "..."}
+  ],
+  "item_count": 12,
+  "generated_at": "2025-01-20T08:00:00Z",
+  "expires_at": "2025-01-20T14:00:00Z"
+}
+```
+
+### Sample Series Metadata 🆕
+
+```json
+{
+  "id": "ee0e8400-e29b-41d4-a716-446655440008",
+  "series_name": "Dune",
+  "content_type": "book",
+  "ordered_items_json": [
+    {"id": "uuid1", "title": "Dune", "order": 1, "label": "Start Here"},
+    {"id": "uuid2", "title": "Dune Messiah", "order": 2, "label": null},
+    {"id": "uuid3", "title": "Children of Dune", "order": 3, "label": null},
+    {"id": "uuid4", "title": "God Emperor of Dune", "order": 4, "label": null},
+    {"id": "uuid5", "title": "Heretics of Dune", "order": 5, "label": null},
+    {"id": "uuid6", "title": "Chapterhouse: Dune", "order": 6, "label": null}
+  ],
+  "companion_series_json": [
+    {
+      "name": "Prequel Series by Brian Herbert",
+      "entries": [
+        {"id": "uuid7", "title": "House Atreides", "order": 1, "label": null},
+        {"id": "uuid8", "title": "House Harkonnen", "order": 2, "label": null},
+        {"id": "uuid9", "title": "House Corrino", "order": 3, "label": null}
+      ],
+      "tip": "Read after Book 1 or after all 6 originals."
     }
-  },
-  "cached_at": "2025-01-15T10:00:00Z",
-  "created_at": "2025-01-15T10:00:00Z",
-  "updated_at": "2025-01-15T10:00:00Z"
+  ],
+  "tip": "Books 1-3 are the core trilogy. Books 4-6 are for dedicated fans.",
+  "total_items": 6,
+  "is_complete": true,
+  "generated_at": "2025-01-20T10:00:00Z"
 }
 ```
 
-### Sample Rating
+### Sample Reading Progress 🆕
 
 ```json
 {
-  "id": "770e8400-e29b-41d4-a716-446655440002",
+  "id": "ff0e8400-e29b-41d4-a716-446655440009",
   "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "book_id": "660e8400-e29b-41d4-a716-446655440001",
-  "rating": 5,
-  "review_text": "Absolutely mind-blowing! Changed how I think about humanity and history.",
-  "review_title": "A must-read for everyone",
-  "is_spoiler": false,
-  "helpful_count": 12,
-  "created_at": "2025-01-14T18:45:00Z",
-  "updated_at": "2025-01-14T18:45:00Z"
-}
-```
-
-### Sample Library Entry
-
-```json
-{
-  "id": "880e8400-e29b-41d4-a716-446655440003",
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "book_id": "660e8400-e29b-41d4-a716-446655440001",
-  "status": "read",
-  "current_page": 464,
-  "total_pages": 464,
-  "started_reading_at": "2024-12-20T09:00:00Z",
-  "finished_reading_at": "2025-01-05T22:30:00Z",
-  "notes": "Great historical perspective on humanity",
-  "is_favorite": true,
-  "added_at": "2024-12-15T14:00:00Z",
-  "updated_at": "2025-01-05T22:30:00Z"
-}
-```
-
-### Sample Recommendation
-
-```json
-{
-  "id": "990e8400-e29b-41d4-a716-446655440004",
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "book_id": "aa0e8400-e29b-41d4-a716-446655440005",
-  "score": 0.92543,
-  "rank": 1,
-  "model_type": "hybrid",
-  "explanation": "Based on your love for Sapiens and 87% of similar readers enjoyed this",
-  "metadata": {
-    "based_on_books": ["660e8400-e29b-41d4-a716-446655440001"],
-    "similar_users_count": 156,
-    "content_score": 0.89,
-    "collaborative_score": 0.94,
-    "neural_score": 0.93
-  },
-  "generated_at": "2025-01-15T10:00:00Z",
-  "expires_at": "2025-01-15T11:00:00Z"
+  "book_id": "uuid-pride-prejudice",
+  "content_type": "book",
+  "current_position": "epubcfi(/6/14[chapter_5]!/4/2/2)",
+  "current_page": 87,
+  "total_pages": 432,
+  "progress_percent": 20.14,
+  "last_read_at": "2025-01-20T22:15:00Z",
+  "total_reading_time_seconds": 4820,
+  "session_count": 4,
+  "is_completed": false
 }
 ```
 
@@ -1801,61 +1599,53 @@ class SentimentOutput(BaseModel):
 
 ## 🚚 Migration Strategy
 
-### Tool: Alembic
+### v2.0 Migration Plan
 
-**Location:** `backend/alembic/versions/`
-
-### Migration Workflow
+The v2.0 additions require these migrations (in order):
 
 ```bash
-# 1. Modify SQLAlchemy models
-# Edit: backend/src/database/models/user.py
+# 1. Add new enum types
+alembic revision -m "add content_type and collection_type enums"
 
-# 2. Generate migration
-cd backend
-alembic revision --autogenerate -m "add email_verified field to users"
+# 2. Update books table (new columns)
+alembic revision -m "add series and free reading fields to books"
 
-# 3. Review generated file (IMPORTANT!)
-# Edit: alembic/versions/xxx_add_email_verified.py
+# 3. Update user_preferences (content_type_preference)
+alembic revision -m "add content_type_preference to user_preferences"
 
-# 4. Apply migration
-alembic upgrade head
+# 4. Update search_history (comic support)
+alembic revision -m "add comic support to search_history"
 
-# 5. Verify
-alembic current
-```
+# 5. Update recommendations (polymorphic content)
+alembic revision -m "add comic support to recommendations"
 
-### Migration File Naming
+# 6. Create comics table
+alembic revision -m "create comics table"
 
-Format: `{timestamp}_{description}.py`
+# 7. Create comic_ratings table
+alembic revision -m "create comic_ratings table"
 
-Example: `20250115_1030_add_email_verified_to_users.py`
+# 8. Create comic_library_items table
+alembic revision -m "create comic_library_items table"
 
-### Rollback Strategy
+# 9. Create collections table
+alembic revision -m "create collections table"
 
-```bash
-# Rollback last migration
-alembic downgrade -1
+# 10. Create user_collections table
+alembic revision -m "create user_collections table"
 
-# Rollback to specific revision
-alembic downgrade <revision_id>
+# 11. Create reading_progress table
+alembic revision -m "create reading_progress table"
 
-# View history
-alembic history
+# 12. Create series_metadata table
+alembic revision -m "create series_metadata table"
+
+# 13. Add triggers for comic ratings and collection item count
+alembic revision -m "add triggers for comic stats and collection counts"
 ```
 
 ### Safe Migration Practices
-
-**✅ DO:**
-- Add nullable columns first, backfill data, then set NOT NULL
-- Add indexes CONCURRENTLY on large tables
-- Test migrations on staging before production
-- Keep migrations backwards-compatible when possible
-
-**❌ DON'T:**
-- Drop columns without a deprecation period
-- Rename columns in a single migration (create new, migrate data, drop old)
-- Run heavy DML in migrations (use background jobs)
+*[Unchanged from v1.0]*
 
 ---
 
@@ -1865,141 +1655,49 @@ alembic history
 
 | Version | Status | Changes |
 |---------|--------|---------|
-| **v1.0** | 🟢 Current | Initial schema |
-| **v1.1** | 📅 Planned | Add reading_challenges table |
-| **v2.0** | 🔮 Future | Add social features (follows, feed) |
-
-### Backward Compatibility Rules
-
-1. **Additive changes = safe** (new columns, tables, indexes)
-2. **Deprecation = 30 days minimum** before removal
-3. **Breaking changes = major version bump** (v1 → v2)
-
-### Deprecated Field Marker
-
-When deprecating:
-```python
-# schemas/user.py
-class UserResponse(BaseModel):
-    # ...
-    old_field: Optional[str] = Field(
-        None,
-        deprecated=True,
-        description="Deprecated: Use new_field instead. Will be removed in v2.0"
-    )
-    new_field: Optional[str] = None
-```
+| **v1.0** | ✅ Deployed | Initial schema (7 tables) |
+| **v2.0** | 🟢 Current | Added comics, collections, reading progress, series metadata (14 tables total) |
+| **v2.1** | 📅 Planned | Social features (follows, activity feed) |
+| **v3.0** | 🔮 Future | Multi-language support, audio books |
 
 ---
 
 ## 🔒 Data Privacy & Security
 
-### Sensitive Data Classification
+### Updated Sensitive Data Classification (v2.0)
 
 | Field | Classification | Handling |
 |-------|---------------|----------|
-| `password_hash` | 🔴 Critical | Never in logs, API responses |
+| `password_hash` | 🔴 Critical | Never in logs or API responses |
 | `email` | 🟡 Sensitive | Encrypted at rest, HTTPS only |
 | `date_of_birth` | 🟡 Sensitive | Not exposed publicly |
-| `ratings` | 🟢 Semi-public | Aggregated for others |
-| `library` | 🟢 Semi-public | Optional public sharing |
+| `ratings` (books + comics) | 🟢 Semi-public | Aggregated for others |
+| `library` (books + comics) | 🟢 Semi-public | Optional public sharing |
+| `reading_progress` 🆕 | 🟡 Sensitive | Never exposed to other users |
 | `search_history` | 🟡 Sensitive | Anonymized after 90 days |
 
-### PII (Personally Identifiable Information)
-
-Stored PII:
-- Email
-- Name
-- Date of birth (optional)
-- Avatar URL
-
-**Retention:**
-- Active accounts: Indefinitely (with consent)
-- Deleted accounts: 30 days soft delete, then hard delete
-- Search history: 90 days rolling
-
-### Data Export (GDPR Compliance)
-
-User can request full data export via:
-- Endpoint: `GET /api/v1/users/me/export`
-- Format: JSON zip file
-- Contents: All user data (profile, ratings, library, preferences)
-
-### Data Deletion
-
-User can request account deletion via:
-- Endpoint: `DELETE /api/v1/users/me`
-- Effect: Soft delete for 30 days, then hard delete
-- Cascade: All ratings, library, recommendations deleted
-
-### Encryption
-
-- **At rest:** PostgreSQL disk encryption (AWS RDS default)
-- **In transit:** TLS 1.3 (HTTPS only)
-- **Passwords:** bcrypt with cost factor 12
-- **JWT tokens:** HS256 signed with 256-bit secret
+### Reading Progress Privacy 🆕
+- `reading_progress` is fully private
+- Never appears in public library views
+- Only user themselves can see their progress
+- Deleted immediately on account deletion
 
 ---
 
 ## 📎 Appendix
 
-### Related Documents
-
-- [PRD.md](./PRD.md) — Product requirements
-- [TECHSPEC.md](./TECHSPEC.md) — Technical specification
-- [APPFLOW.md](./APPFLOW.md) — User flows
-- [API_DESIGN.md](./API_DESIGN.md) — API endpoints (coming)
-
-### Type Generation Tools
-
-**Backend → OpenAPI:**
-```bash
-# FastAPI auto-generates at /openapi.json
-```
-
-**OpenAPI → TypeScript:**
-```bash
-npx openapi-typescript http://localhost:8000/openapi.json -o types/api-generated.ts
-```
-
-### Database Tools
-
-**GUI Clients:**
-- [pgAdmin](https://www.pgadmin.org/) (Official)
-- [DBeaver](https://dbeaver.io/) (Universal)
-- [TablePlus](https://tableplus.com/) (Modern)
-
-**CLI:**
-```bash
-# Connect to Kitabee DB
-docker exec -it kitabee_postgres psql -U kitabee_user -d kitabee_db
-
-# Common queries
-\dt              -- List tables
-\d users         -- Describe table
-\di              -- List indexes
-```
-
-### Glossary
-
-- **CASCADE:** Auto-delete related rows when parent deleted
-- **DDL:** Data Definition Language (CREATE, ALTER, DROP)
-- **DML:** Data Manipulation Language (INSERT, UPDATE, DELETE)
-- **ER:** Entity Relationship
-- **GIN Index:** Generalized Inverted Index (for arrays, JSON)
-- **JSONB:** Binary JSON (indexable, faster than JSON in Postgres)
-- **PII:** Personally Identifiable Information
-- **UUID:** Universally Unique Identifier
-- **TTL:** Time To Live (cache expiration)
-
 ### Change Log
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | [Today] | [Your Name] | Initial schema documentation |
+| 1.0 | [Original] | [Your Name] | Initial schema (7 tables) |
+| 2.0 | [Today] | [Your Name] | Added comics, comic_ratings, comic_library_items, collections, user_collections, reading_progress, series_metadata tables. Added series/free-reading fields to books. Added content_type support to recommendations, preferences, search_history. New enums: content_type, content_preference, collection_type. |
 
 ---
 
 **End of Schema Document** 🗄️
 
 *"The schema is the contract. Break it, break the app."*
+
+---
+
