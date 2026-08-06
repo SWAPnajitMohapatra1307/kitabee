@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     google_books_api_key: str
+    comic_vine_api_key: str = ""
+    internet_archive_base_url: str = "https://archive.org"
 
     # JWT
     jwt_secret_key: str
