@@ -82,17 +82,17 @@ Week 3 restructured completely. Week 4 updated to reflect new screens. Weeks 1-2
 ```
 Week 1: ██████████ 100% (7/7 days) ✅
 Week 2: ██████████ 100% (7/7 days) ✅
-Week 3: █░░░░░░░░░  14% (1/7 days) 🟡 IN PROGRESS
+Week 3: ██░░░░░░░░  29% (2/7 days) 🟡 IN PROGRESS
 Week 4: ░░░░░░░░░░   0% (0/7 days)
 Week 5: ░░░░░░░░░░   0% (0/7 days)
 
-Total:  ████░░░░░░ 43% (15/35 days)
+Total:  ████░░░░░░ 46% (16/35 days)
 ```
 
 ### Task Completion Stats
 
 | **Total Tasks** | 200+ |
-| **Completed** | 88 |
+| **Completed** | 96 |
 | **In Progress** | 0 |
 | **Blocked** | 0 |
 | **Skipped** | 1 (T14.3 — target already met) |
@@ -101,10 +101,10 @@ Total:  ████░░░░░░ 43% (15/35 days)
 
 ### Current Sprint
 
-**Day:** Day 14 complete ✅
-**Focus:** Week 3 begins tomorrow — ML engine + comics + collections
+**Day:** Day 16 complete ✅
+**Focus:** Week 3 — Day 17 next — Collection Engine (KMeans + Mood + Titles)
 **Blocker:** None
-**Next Milestone:** Day 15 — TF-IDF Vectorizer (foundation for all ML)
+**Next Milestone:** Day 20 — Netflix-Style Collections API
 
 ### Velocity
 
@@ -136,7 +136,7 @@ Total:  ████░░░░░░ 43% (15/35 days)
 [✅] Day 13 - User Preferences
 [✅] Day 14 - Week 2 Integration Testing
 [✅] Day 15 - TF-IDF Vectorizer (Books Foundation)               🆕 v2.0
-[ ] Day 16 - Comic Vine + Internet Archive API Clients           🆕 v2.0
+[✅] Day 16 - Comic Vine + Internet Archive API Clients          🆕 v2.0
 [ ] Day 17 - Collection Engine (KMeans + Mood + Titles)          🆕 v2.0
 [ ] Day 18 - Series Intelligence (Reading Order Guide)           🆕 v2.0
 [ ] Day 19 - KNN Collaborative Filtering + Personalizer          🆕 v2.0
@@ -294,31 +294,46 @@ Build external API clients for comics metadata (Comic Vine) and free reading con
 
 ### Tasks
 
-- [ ] **T16.1** Study Comic Vine API (endpoints, auth, rate limits)
-  - Status: 🔴 BLOCKED
+- [x] **T16.1** Study Comic Vine API (endpoints, auth, rate limits)
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: Studied endpoints, rate limits (200/hr), auth via api_key param, format=json required.
 
-- [ ] **T16.2** Study Internet Archive API (search, metadata, downloads)
-  - Status: 🔴 BLOCKED
+- [x] **T16.2** Study Internet Archive API (search, metadata, downloads)
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: Fully public API, no key needed. advancedsearch.php + metadata/{id} + download/{id}/{file}.
 
-- [ ] **T16.3** Create `backend/src/external/comic_vine.py`
-  - Status: 🔴 BLOCKED
-  - Notes: ComicVineClient with search_comics, get_comic_details, get_series methods
+- [x] **T16.3** Create `backend/src/external/comic_vine.py`
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: ComicVineClient with search_comics, get_comic, get_volume. cv_ ID prefix. Chrome User-Agent required — Comic Vine blocks httpx default agent. HTML stripped from descriptions.
 
-- [ ] **T16.4** Create `backend/src/external/internet_archive.py`
-  - Status: 🔴 BLOCKED
-  - Notes: InternetArchiveClient with search_free_books, search_free_comics, get_reading_links, is_public_domain
+- [x] **T16.4** Create `backend/src/external/internet_archive.py`
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: InternetArchiveClient with search_free_books, get_item, get_read_url, is_public_domain. ia_ ID prefix. Format priority: EPUB > Text PDF > DjVu > CBZ > CBR.
 
-- [ ] **T16.5** Add COMIC_VINE_API_KEY and INTERNET_ARCHIVE_BASE_URL to config.py
-  - Status: 🔴 BLOCKED
+- [x] **T16.5** Add COMIC_VINE_API_KEY and INTERNET_ARCHIVE_BASE_URL to config.py
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: comic_vine_api_key defaults to "" (no crash if missing). internet_archive_base_url defaults to https://archive.org.
 
-- [ ] **T16.6** Write tests (test_comic_vine.py + test_internet_archive.py)
-  - Status: 🔴 BLOCKED
+- [x] **T16.6** Write tests (test_comic_vine.py + test_internet_archive.py)
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: 69 new tests. 37 Comic Vine + 32 Internet Archive. All respx mocked. mocker fixture unavailable — used monkeypatch throughout.
 
-- [ ] **T16.7** Manual smoke test both clients
-  - Status: 🔴 BLOCKED
+- [x] **T16.7** Manual smoke test both clients
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Notes: Internet Archive — real results returned. Comic Vine — 403 fixed by adding Chrome User-Agent header. Both clients confirmed working against real APIs.
 
-- [ ] **T16.8** Commit + update notes
-  - Status: 🔴 BLOCKED
+- [x] **T16.8** Commit + update notes
+  - Status: ✅ DONE
+  - Completed: 2026-08-07
+  - Commit: 7bd8481
+  - Notes: 463 total tests passing. Zero regressions.
 
 **Success Criteria:**
 - Comics search works via Comic Vine
@@ -825,7 +840,7 @@ Week 4 updated in v2.0 to build:
 | Backend test coverage | 70%+ | 78% | ✅ Met |
 | Frontend test coverage | 50%+ | 0% | 🔴 Not started |
 | API endpoints implemented | 20+ | 22 | ✅ On track |
-| ML modules built | 10+ | 1 | 🟡 In progress |
+| ML modules built | 10+ | 3 | 🟡 In progress |
 | Mobile screens built | 20+ | 0 | 🔴 Week 4 |
 | Documentation files | 8+ | 8 | ✅ Complete |
 | **Total tests passing** | 400+ | 394 | ✅ Exceeded |
@@ -890,16 +905,27 @@ Week 4 updated in v2.0 to build:
 - 📊 Tests: 394 passing (43 new), zero regressions
 - 🔗 Commit: c93ad86
 
+### Day 16 — 2026-08-07
+- ✅ Completed: 8 tasks (T16.1 through T16.8)
+- ⏱️ Time: ~5 hours
+- 🎯 Focus: Comic Vine + Internet Archive API clients
+- 💡 Learnings: Comic Vine blocks httpx default User-Agent — Chrome header required. Comic Vine API-level errors return HTTP 200 with status_code != 1 — must check both. mocker fixture needs pytest-mock which is not installed — use monkeypatch. ia_ and cv_ prefixes prevent ID collisions across sources. Internet Archive is fully public — no key needed.
+- 📊 Tests: 463 passing (69 new), zero regressions
+- 🔗 Commit: 7bd8481
+
 ---
 
 ## 🎯 CURRENT FOCUS
 
 ### Right Now Working On
-```
-Task: T16.1 — Study Comic Vine API
+Task: T17.1 — Design mood taxonomy + collection title templates
 Status: 🟢 READY (unblocked)
-Notes: Day 16 starts here
-```
+
+### Up Next Queue
+1. T17.2 — Create ml/mood_detector.py
+2. T17.3 — Create ml/collection_engine.py
+3. T17.4 — Update ml/__init__.py exports
+4. T17.5 — Write tests for mood_detector + collection_engine
 
 ### Up Next Queue
 1. T15.1 — Study TF-IDF theory
@@ -967,6 +993,7 @@ git push
 - 🎉 **Ratings + Library working** (Day 12)
 - 🎉 **Week 2 Complete!** (Day 14) — 351 tests, 78% coverage, 2026-08-05
 - 🎉 **Vision expanded** (Post-Day 14) — Books + Comics + Netflix collections + Series guide + Free reading
+- 🎉 **Comic Vine + Internet Archive clients live** (Day 16) — 463 tests passing
 - [ ] 🎉 **First Netflix collection generated** (Day 17)
 - [ ] 🎉 **Series order guide working** (Day 18)
 - [ ] 🎉 **First AI collection API response** (Day 20)
@@ -990,6 +1017,6 @@ git push
 
 *"What gets measured gets managed. What gets tracked gets done."*
 
-**Days 1-15 done. 394 tests passing. Day 16 (Comic Vine + Internet Archive) is next.** 🏁
+**Days 1-16 done. 463 tests passing. Day 17 (Collection Engine — KMeans + Mood + Titles) is next.** 🏁
 
 ---
