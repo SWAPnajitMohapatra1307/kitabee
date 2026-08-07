@@ -1,7 +1,19 @@
-from src.ml.vectorizer import ContentVectorizer
-from src.ml.mood_detector import MoodDetector
-from src.ml.collection_engine import CollectionEngine
-from .series_detector import SeriesDetector
-from .series_builder import SeriesBuilder
+"""ML module exports."""
 
-__all__ = ["ContentVectorizer", "MoodDetector", "CollectionEngine"]
+from src.ml.collection_engine import CollectionEngine
+from src.ml.collaborative import CollaborativeFilter
+from src.ml.mood_detector import MoodDetector
+from src.ml.personalizer import Personalizer
+from src.ml.series_builder import SeriesBuilder
+from src.ml.series_detector import SeriesDetector
+from src.ml.vectorizer import ContentVectorizer
+
+__all__ = [
+    "CollectionEngine",
+    "CollaborativeFilter",
+    "ContentVectorizer",
+    "MoodDetector",
+    "Personalizer",
+    "SeriesBuilder",
+    "SeriesDetector",
+]
