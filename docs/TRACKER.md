@@ -82,17 +82,17 @@ Week 3 restructured completely. Week 4 updated to reflect new screens. Weeks 1-2
 ```
 Week 1: ██████████ 100% (7/7 days) ✅
 Week 2: ██████████ 100% (7/7 days) ✅
-Week 3: ██████░░░░  57% (4/7 days) 🟡 IN PROGRESS
+Week 3: ████████░░  71% (5/7 days) 🟡 IN PROGRESS
 Week 4: ░░░░░░░░░░   0% (0/7 days)
 Week 5: ░░░░░░░░░░   0% (0/7 days)
-Total:  █████░░░░░ 51% (18/35 days)
+Total:  ██████░░░░ 54% (19/35 days)
 ```
 
 ### Task Completion Stats
 
 | **Total Tasks** | 200+ |
-| **Completed** | 110 |
-| **Total tests passing** | 400+ | 625 | ✅ Exceeded |
+| **Completed** | 116 |
+| **Total tests passing** | 400+ | 677 | ✅ Exceeded |
 | **In Progress** | 0 |
 | **Blocked** | 0 |
 | **Skipped** | 1 (T14.3 — target already met) |
@@ -101,8 +101,8 @@ Total:  █████░░░░░ 51% (18/35 days)
 
 ### Current Sprint
 
-**Day:** Day 18 complete ✅
-**Focus:** Week 3 — Day 19 next — KNN Collaborative Filtering + Personalizer
+**Day:** Day 19 complete ✅
+**Focus:** Week 3 — Day 20 next — Neural Recommender + Hybrid Collections API
 **Next Milestone:** Day 20 — Netflix-Style Collections API
 
 ### Velocity
@@ -111,7 +111,7 @@ Total:  █████░░░░░ 51% (18/35 days)
 |------|--------------|-----------|----------|
 | Week 1 | ~50 | 50 | ✅ Complete (182 tests) |
 | Week 2 | ~35 | 32 | ✅ Complete (351 tests, 78% cov) |
-| Week 3 | ~42 | 28 | 🟡 In progress (625 tests) |
+| Week 3 | ~42 | 34 | 🟡 In progress (677 tests) |
 | Week 4 | ~45 | 0 | Not started |
 | Week 5 | ~25 | 0 | Not started |
 
@@ -138,7 +138,7 @@ Total:  █████░░░░░ 51% (18/35 days)
 [✅] Day 16 - Comic Vine + Internet Archive API Clients          🆕 v2.0
 [✅] Day 17 - Collection Engine (KMeans + Mood + Titles)         🆕 v2.0
 [✅] Day 18 - Series Intelligence (Reading Order Guide)          🆕 v2.0
-[ ] Day 19 - KNN Collaborative Filtering + Personalizer          🆕 v2.0
+[✅] Day 19 - KNN Collaborative Filtering + Personalizer          🆕 v2.0
 [ ] Day 20 - Neural Recommender + Hybrid Collections API         🆕 v2.0
 [ ] Day 21 - ML Testing + Evaluation + Week 3 Review             🆕 v2.0
 [ ] Day 22 - Expo Project + Navigation
@@ -221,7 +221,7 @@ Total:  █████░░░░░ 51% (18/35 days)
 
 ### Week 3 Progress
 ```
-███████░░░ 57% (28/42 tasks estimated)
+████████░░ 71% (34/42 tasks estimated)
 ```
 
 ### Week 3 Overview
@@ -451,32 +451,41 @@ Detect series membership and generate correct reading order with "Start Here", "
 User-based collaborative filtering. Enables "Because you loved X..." rows.
 
 ### Tasks
+- [x] **T19.1** Study collaborative filtering (user-item matrix, KNN, cold start)
+  - Status: ✅ DONE
+  - Completed: 2026-08-08
+  - Notes: Understood user-item matrix, cosine similarity for user similarity, cold start problem. Design confirmed before coding.
 
-- [ ] **T19.1** Study collaborative filtering (user-item matrix, KNN, cold start)
-  - Status: 🔴 BLOCKED
+- [x] **T19.2** Create notebook `notebooks/04_collaborative.ipynb`
+  - Status: ⏭️ SKIPPED
+  - Completed: 2026-08-08
+  - Notes: Skipped — algorithm understood from design phase. Prototyped directly in collaborative.py. Same approach used Day 18.
 
-- [ ] **T19.2** Create notebook `notebooks/04_collaborative.ipynb`
-  - Status: 🔴 BLOCKED
+- [x] **T19.3** Create `backend/src/ml/collaborative.py` (CollaborativeFilter class)
+  - Status: ✅ DONE
+  - Completed: 2026-08-08
+  - Notes: CollaborativeFilter with fit(), find_similar_users(), recommend(), is_fitted. User-item matrix via numpy. Cosine similarity via sklearn. Cold start guard — fewer than 2 ratings returns []. String coercion on user_id and content_id prevents int/str mismatch.
 
-- [ ] **T19.3** Create `backend/src/ml/collaborative.py` (CollaborativeRecommender class)
-  - Status: 🔴 BLOCKED
-  - Notes: fit, find_similar_users, recommend_for_user, get_because_you_loved_row
+- [x] **T19.4** Create `backend/src/ml/personalizer.py` (Personalizer class)
+  - Status: ✅ DONE
+  - Completed: 2026-08-08
+  - Notes: Personalizer with rank(), filter_by_preference(), inject_because_you_loved(). Scoring: +2.0 genre match on 4+ rated, +1.0 mood match on 4+ rated, +0.5 genre match on any rated. cv_ prefix detects comics. inject returns None if no ratings or no recommendations.
 
-- [ ] **T19.4** Create `backend/src/ml/personalizer.py` (Personalizer class)
-  - Status: 🔴 BLOCKED
-  - Notes: rank_collections_for_user, inject_personalized_rows, filter_by_content_preference
+- [x] **T19.5** Write tests for collaborative + personalizer
+  - Status: ✅ DONE
+  - Completed: 2026-08-08
+  - Notes: 52 new tests. test_collaborative.py (29 tests), test_personalizer.py (23 tests). All passing. Zero regressions on existing 625 tests.
 
-- [ ] **T19.5** Write tests for collaborative + personalizer
-  - Status: 🔴 BLOCKED
-
-- [ ] **T19.6** Commit + update notes
-  - Status: 🔴 BLOCKED
+- [x] **T19.6** Commit + update notes
+  - Status: ✅ DONE
+  - Completed: 2026-08-08
+  - Notes: 677 total tests passing. Zero regressions. __init__.py updated with CollaborativeFilter and Personalizer exports.
 
 **Success Criteria:**
-- Similar users found correctly
-- "Because you loved X" row generates
-- Cold start handled gracefully
-- Content preference filter works
+- ✅ Similar users found correctly via cosine similarity
+- ✅ "Because you loved X" row generates from highest rated anchor
+- ✅ Cold start handled gracefully — returns empty list
+- ✅ Content preference filter works — cv_ prefix = comic
 
 ---
 
@@ -866,7 +875,7 @@ Week 4 updated in v2.0 to build:
 | ML modules built | 10+ | 7 | 🟡 In progress |
 | Mobile screens built | 20+ | 0 | 🔴 Week 4 |
 | Documentation files | 8+ | 8 | ✅ Complete |
-| **Total tests passing** | 400+ | 625 | ✅ Exceeded |
+| **Total tests passing** | 400+ | 677 | ✅ Exceeded |
 
 ### Time Metrics
 
@@ -1033,6 +1042,7 @@ git push
 - 🎉 **Comic Vine + Internet Archive clients live** (Day 16) — 463 tests passing
 - 🎉 **First Netflix collection generated** (Day 17) — CollectionEngine live, 100 new tests, 563 total
 - [ ] 🎉 **Series order guide working** (Day 18)
+- [x] 🎉 **CollaborativeFilter + Personalizer live** (Day 19) — 677 tests, "Because you loved X" row builder complete
 - [ ] 🎉 **First AI collection API response** (Day 20)
 - [ ] 🎉 **Netflix home screen on phone** (Day 24)
 - [ ] 🎉 **First free book read in-app** (Day 27)
@@ -1055,5 +1065,5 @@ git push
 
 *"What gets measured gets managed. What gets tracked gets done."*
 
-**Days 1-18 done. 625 tests passing. Day 19 (KNN Collaborative Filtering + Personalizer) is next.** 🏁
+**Days 1-19 done. 677 tests passing. Day 20 (Neural Recommender + Hybrid Collections API) is next.** 🏁
 ```
