@@ -2,7 +2,9 @@
 
 from src.ml.collection_engine import CollectionEngine
 from src.ml.collaborative import CollaborativeFilter
+from src.ml.hybrid import HybridEngine
 from src.ml.mood_detector import MoodDetector
+from src.ml.neural import NeuralRecommender
 from src.ml.personalizer import Personalizer
 from src.ml.series_builder import SeriesBuilder
 from src.ml.series_detector import SeriesDetector
@@ -12,7 +14,9 @@ __all__ = [
     "CollectionEngine",
     "CollaborativeFilter",
     "ContentVectorizer",
+    "HybridEngine",
     "MoodDetector",
+    "NeuralRecommender",
     "Personalizer",
     "SeriesBuilder",
     "SeriesDetector",

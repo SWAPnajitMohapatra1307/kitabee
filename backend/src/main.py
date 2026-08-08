@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from src.api.response import error_envelope
 from src.api.routes import auth, books, health, library, preferences, ratings, users
 from src.api.routes.series import router as series_router
+from src.api.routes.collections import router as collections_router
 from src.cache.redis_client import redis_client
 from src.external.google_books import GoogleBooksClient
 
@@ -128,3 +129,4 @@ app.include_router(ratings.router)
 app.include_router(library.router)
 app.include_router(preferences.router)
 app.include_router(series_router)
+app.include_router(collections_router)
