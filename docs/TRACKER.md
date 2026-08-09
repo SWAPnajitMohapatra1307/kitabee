@@ -83,9 +83,9 @@ Week 3 restructured completely. Week 4 updated to reflect new screens. Weeks 1-2
 Week 1: ██████████ 100% (7/7 days) ✅
 Week 2: ██████████ 100% (7/7 days) ✅
 Week 3: ██████████ 100% (7/7 days) ✅
-Week 4: ░░░░░░░░░░   0% (0/7 days)
+Week 4: ███░░░░░░░  29% (2/7 days)
 Week 5: ░░░░░░░░░░   0% (0/7 days)
-Total:  ████████░░  60% (21/35 days)
+Total:  ████████░░  63% (23/35 days)
 ```
 
 ### Task Completion Stats
@@ -142,8 +142,8 @@ Total:  ████████░░  60% (21/35 days)
 [✅] Day 19 - KNN Collaborative Filtering + Personalizer         🆕 v2.0
 [✅] Day 20 - Neural Recommender + Hybrid Collections API        🆕 v2.0
 [✅] Day 21 - ML Testing + Evaluation + Week 3 Review            🆕 v2.0
-[ ] Day 22 - Expo Project + Navigation
-[ ] Day 23 - Auth Screens + Onboarding (books/comics/both)       🆕 v2.0
+[✅] Day 22 - Expo Project + Navigation
+[✅] Day 23 - Auth Screens + Backend Wiring
 [ ] Day 24 - Netflix-Style Home Screen (Collection Rows)         🆕 v2.0
 [ ] Day 25 - Search Screen (Books + Comics Unified)              🆕 v2.0
 [ ] Day 26 - Book/Comic Detail + Series Order UI                 🆕 v2.0
@@ -503,7 +503,7 @@ Validate all ML models with standard IR metrics. Integration test full pipeline.
 
 ### Week 4 Progress
 ```
-░░░░░░░░░░ 0% (0/45 tasks estimated)
+███░░░░░░░  29% (16/45 tasks estimated)
 ```
 
 ### Week 4 Overview
@@ -518,58 +518,88 @@ Week 4 updated in v2.0 to build:
 
 ## 📅 DAY 22: Expo Project + Navigation Setup
 
-### Tasks
+- [x] **T22.1** Verify Expo setup from Day 1
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Node 20.19.5 LTS required. Node 22 breaks Expo SDK 57.
 
-- [ ] **T22.1** Verify Expo setup from Day 1
-  - Status: 🔴 BLOCKED
+- [x] **T22.2** Install navigation + state + deps
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: React Navigation 7, Zustand, AsyncStorage, axios installed.
 
-- [ ] **T22.2** Install navigation + state + WebView deps
-  - Status: 🔴 BLOCKED
+- [x] **T22.3** Create folder structure
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
 
-- [ ] **T22.3** Create folder structure
-  - Status: 🔴 BLOCKED
+- [x] **T22.4** Setup theme system
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: tokens.ts + typography.ts + ThemeContext.tsx. Zustand persist. #FFC93C only accent.
 
-- [ ] **T22.4** Setup theme system (colors, typography, dark/light context)
-  - Status: 🔴 BLOCKED
+- [x] **T22.5** Setup navigation
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: RootNavigator + AuthNavigator + MainTabNavigator. All headerShown false.
 
-- [ ] **T22.5** Setup navigation (Auth Stack, Onboarding Stack, Main Tabs)
-  - Status: 🔴 BLOCKED
+- [x] **T22.6** Create placeholder screens
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Welcome, Login, Register, Home, Search, Library, Insights, Profile.
 
-- [ ] **T22.6** Create placeholder screens for all destinations
-  - Status: 🔴 BLOCKED
-
-- [ ] **T22.7** Test navigation on phone + commit
-  - Status: 🔴 BLOCKED
+- [x] **T22.7** Test navigation on phone + commit
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Commit: feat(frontend): Day 22 — Expo project + navigation + theme system
 
 ---
 
-## 📅 DAY 23: Auth Screens + Onboarding (v2.0)
+## 📅 DAY 23: Auth Screens + Backend Wiring
 
-### Tasks
+- [x] **T23.1** Update api.ts baseURL for physical phone LAN IP
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: 10.0.2.2 replaced with 192.168.1.6. Physical Android phone connects correctly.
 
-- [ ] **T23.1** Setup Axios client with auth interceptor
-  - Status: 🔴 BLOCKED
+- [x] **T23.2** Build reusable Button + Input components
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Sharp corners (rounded.none). Amber primary. Outline + ghost variants.
 
-- [ ] **T23.2** Setup Zustand user store
-  - Status: 🔴 BLOCKED
+- [x] **T23.3** Build WelcomeScreen
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Hero + SIGN UP FREE + LOG IN CTAs. SafeAreaView from safe-area-context.
 
-- [ ] **T23.3** Setup AsyncStorage for tokens
-  - Status: 🔴 BLOCKED
+- [x] **T23.4** Build LoginScreen
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Email + password fields. Error alerts. Backend wired.
 
-- [ ] **T23.4** Build WelcomeScreen
-  - Status: 🔴 BLOCKED
+- [x] **T23.5** Build RegisterScreen
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Name + email + password. Backend field is `name` not `full_name`.
 
-- [ ] **T23.5** Build LoginScreen
-  - Status: 🔴 BLOCKED
+- [x] **T23.6** Create auth service
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: register() calls POST /auth/register then POST /auth/login. login() calls POST /auth/login then GET /users/me. Real user profile stored not token object.
 
-- [ ] **T23.6** Build RegisterScreen
-  - Status: 🔴 BLOCKED
+- [x] **T23.7** Wire auth gate in RootNavigator
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: isAuthenticated from Zustand drives stack switch. No manual navigation needed after login.
 
-- [ ] **T23.7** Build Onboarding flow (Books/Comics/Both → Rate 5 → Pick Genres)
-  - Status: 🔴 BLOCKED
+- [x] **T23.8** Test full flow on phone
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Notes: Register → Main ✅. Login → Main ✅. Wrong credentials → error ✅. Kill + reopen → still logged in ✅. Logout → Welcome ✅.
 
-- [ ] **T23.8** Test auth + onboarding flow on phone + commit
-  - Status: 🔴 BLOCKED
+- [x] **T23.9** Commit + push
+  - Status: ✅ DONE
+  - Completed: 2026-08-09
+  - Commit: feat(frontend): Day 23 — auth screens + backend wiring + nav gate
 
 ---
 
@@ -922,6 +952,7 @@ Week 3 complete. Ready for Week 4 — Mobile App.
 | 2.0 | 2026-08-05 | v2.0 vision — books+comics, Netflix collections, series, free reading |
 | 2.1 | 2026-08-08 | Days 15-19 complete. Week 3 in progress. |
 | 2.2 | 2026-08-09 | Days 20-21 complete. Week 3 done. 792 tests, 86% coverage. M10 added. Week 4 unblocked. |
+| 2.3 | 2026-08-09 | Days 22-23 complete. Expo scaffold + auth flow live on physical Android phone. |
 
 ---
 
