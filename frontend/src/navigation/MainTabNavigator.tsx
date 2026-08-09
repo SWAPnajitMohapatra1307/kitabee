@@ -1,7 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Text } from "react-native";
-import HomeScreen from "../screens/HomeScreen";
+import HomeStackNavigator from "./HomeStackNavigator";
 import SearchScreen from "../screens/SearchScreen";
 import LibraryScreen from "../screens/LibraryScreen";
 import InsightsScreen from "../screens/InsightsScreen";
@@ -42,7 +42,7 @@ export default function MainTabNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeStackNavigator}
         options={{ tabBarIcon: tabIcon("🏠") }}
       />
       <Tab.Screen

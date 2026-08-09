@@ -1,0 +1,105 @@
+import React from "react"
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
+import { useTheme } from "../theme/ThemeContext"
+import ContentCard from "../components/ContentCard"
+import { HomeStackParamList } from "../navigation/HomeStackNavigator"
+
+type FullCollectionRouteProp = RouteProp<HomeStackParamList, "FullCollection">
+type FullCollectionNavProp = NativeStackNavigationProp<
+  HomeStackParamList,
+  "FullCollection"
+>
+
+const FullCollectionScreen: React.FC = () => {
+  const { theme, typography, spacing } = useTheme()
+  const route = useRoute<FullCollectionRouteProp>()
+  const navigation = useNavigation<FullCollectionNavProp>()
+
+  const { title, items } = route.params
+
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.background.primary }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: spacing.xs,
+          paddingVertical: spacing.xxs,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border.default,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          style={{ paddingRight: spacing.xs }}
+        >
+          <Text
+            style={[
+              typography["title-md"],
+              { color: theme.text.primary },
+            ]}
+          >
+            ‹
+          </Text>
+        </TouchableOpacity>
+        <Text
+          numberOfLines={1}
+          style={[
+            typography["title-md"],
+            { color: theme.text.primary, flex: 1 },
+          ]}
+        >
+          {title}
+        </Text>
+      </View>
+
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.content_id}
+        numColumns={2}
+        contentContainerStyle={{ padding: spacing.xs }}
+        columnWrapperStyle={{ justifyContent: "space-between" }}
+        renderItem={({ item }) => (
+          <View style={{ marginBottom: spacing.xs }}>
+            <ContentCard
+              item={item}
+              onPress={(i) => console.log("Tap item:", i.title)}
+            />
+          </View>
+        )}
+        ListEmptyComponent={
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              padding: spacing.lg,
+            }}
+          >
+            <Text
+              style={[
+                typography["body-md"],
+                { color: theme.text.secondary },
+              ]}
+            >
+              No items in this collection.
+            </Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
+  )
+}
+
+export default FullCollectionScreen
