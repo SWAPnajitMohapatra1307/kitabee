@@ -225,12 +225,12 @@ def test_collections_route_returns_valid_anonymous_envelope() -> None:
 
     data = payload["data"]
 
-    assert {"collections", "total", "personalized"} <= set(data.keys())
-    assert isinstance(data["collections"], list)
-    assert data["total"] == len(data["collections"])
+    assert {"rows", "total", "personalized"} <= set(data.keys())
+    assert isinstance(data["rows"], list)
+    assert data["total"] == len(data["rows"])
     assert data["personalized"] is False
 
-    for row in data["collections"]:
+    for row in data["rows"]:
         assert {"id", "title", "items", "item_count"} <= set(row.keys())
         assert row["item_count"] == len(row["items"])
         assert len(row["items"]) <= 5

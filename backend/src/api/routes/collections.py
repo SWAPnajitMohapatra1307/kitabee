@@ -169,6 +169,52 @@ _CATALOG_SEED: list[dict[str, Any]] = [
 ]
 
 
+_CATALOG_BY_ID: dict[str, dict[str, Any]] = {
+    item["id"]: item for item in _CATALOG_SEED
+}
+
+
+def _enrich_item(item_id: str) -> dict[str, Any] | None:
+    """Convert a catalog ID into a full ContentItem dict for the frontend."""
+    raw = _CATALOG_BY_ID.get(item_id)
+    if raw is None:
+        return None
+
+    is_free = bool(raw.get("is_public_domain", False))
+    source = raw.get("source", "")
+    content_type = "comic" if source.startswith("cv_") else "book"
+
+    return {
+        "content_id": raw["id"],
+        "title": raw.get("title", ""),
+        "author": raw.get("author", "Unknown"),
+        "cover_url": raw.get("cover_url"),
+        "content_type": content_type,
+        "is_free": is_free,
+        "free_url": raw.get("free_url"),
+    }
+
+
+def _enrich_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Turn a row with ID list into a row with full ContentItem list."""
+    raw_items = row.get("items", [])
+    enriched: list[dict[str, Any]] = []
+    for entry in raw_items:
+        if isinstance(entry, str):
+            enriched_item = _enrich_item(entry)
+            if enriched_item is not None:
+                enriched.append(enriched_item)
+        elif isinstance(entry, dict):
+            enriched.append(entry)
+
+    return {
+        "id": row.get("id", ""),
+        "title": row.get("title", ""),
+        "mood": row.get("mood", ""),
+        "items": enriched,
+        "item_count": len(enriched),
+    }
+
 async def _get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
@@ -242,10 +288,13 @@ async def get_collections(
         row_limit=row_limit,
     )
 
+    enriched_rows = [_enrich_row(row) for row in rows]
+    enriched_rows = [row for row in enriched_rows if row["items"]]
+
     return success_envelope(
         {
-            "collections": rows,
-            "total": len(rows),
+            "rows": enriched_rows,
+            "total": len(enriched_rows),
             "personalized": user_id is not None and len(user_ratings) > 0,
         }
     )

@@ -111,7 +111,7 @@ async def test_anonymous_response_shape(
     body = response.json()
     assert body["success"] is True
     assert "data" in body
-    assert "collections" in body["data"]
+    assert "rows" in body["data"]
     assert "total" in body["data"]
     assert "personalized" in body["data"]
 
@@ -144,7 +144,7 @@ async def test_anonymous_collections_is_list(
         response = await client.get(ENDPOINT)
 
     data = response.json()["data"]
-    assert isinstance(data["collections"], list)
+    assert isinstance(data["rows"], list)
 
 
 @pytest.mark.asyncio
@@ -160,7 +160,7 @@ async def test_anonymous_total_matches_collections_length(
         response = await client.get(ENDPOINT)
 
     data = response.json()["data"]
-    assert data["total"] == len(data["collections"])
+    assert data["total"] == len(data["rows"])
 
 
 @pytest.mark.asyncio
@@ -192,6 +192,7 @@ async def test_authenticated_personalized_flag(
 
     assert response.status_code == 200
     assert response.json()["data"]["personalized"] is True
+
 
 @pytest.mark.asyncio
 async def test_n_collections_query_param(
@@ -269,10 +270,22 @@ async def test_each_row_has_required_keys(
     ) as client:
         response = await client.get(ENDPOINT)
 
-    rows = response.json()["data"]["collections"]
-    required = {"id", "title", "mood", "items", "item_count"}
+    rows = response.json()["data"]["rows"]
+    row_required = {"id", "title", "mood", "items", "item_count"}
+    item_required = {
+        "content_id",
+        "title",
+        "author",
+        "cover_url",
+        "content_type",
+        "is_free",
+        "free_url",
+    }
     for row in rows:
-        assert required.issubset(row.keys())
+        assert row_required.issubset(row.keys())
+        assert isinstance(row["items"], list)
+        for item in row["items"]:
+            assert item_required.issubset(item.keys())
 
 
 @pytest.mark.asyncio
