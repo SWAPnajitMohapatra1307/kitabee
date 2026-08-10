@@ -3,8 +3,8 @@
 Defines request and response shapes for:
     POST   /api/v1/library
     GET    /api/v1/library
-    PATCH  /api/v1/library/{book_id}
-    DELETE /api/v1/library/{book_id}
+    PATCH  /api/v1/library/{content_id}
+    DELETE /api/v1/library/{content_id}
 """
 
 from __future__ import annotations
@@ -19,9 +19,17 @@ from src.database.models.library_item import LibraryStatus
 
 
 class LibraryItemAdd(BaseModel):
-    """Payload for adding a book to the library."""
+    """Payload for adding a content item to the library.
 
-    book_id: UUID
+    content_id uses the prefixed convention: gb:{id}, cv:{id}, ia:{id}.
+    The service layer resolves this to an internal book UUID before
+    writing to the DB.
+    """
+
+    content_id: str = Field(
+        ...,
+        description="Prefixed content identifier (gb:, cv:, ia:).",
+    )
     status: LibraryStatus = Field(LibraryStatus.WANT_TO_READ)
     current_page: Optional[int] = Field(None, ge=0)
     total_pages: Optional[int] = Field(None, ge=1)

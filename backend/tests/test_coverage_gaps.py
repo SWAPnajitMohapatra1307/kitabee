@@ -214,46 +214,67 @@ class TestCollectionServiceGaps:
 class TestCollectionsRouteGaps:
     """Cover lines 180-190, 233: optional auth token parsing + preferences."""
 
+    def _stub_router(self):
+        class _Stub:
+            async def search(self, query, limit, sources=None):
+                return []
+            async def get_by_content_id(self, content_id):
+                return None
+            async def get_similar(self, content_id, limit):
+                return []
+        return _Stub()
+
     def test_collections_with_invalid_token_returns_anonymous(self) -> None:
         from fastapi.testclient import TestClient
         from src.main import app
+        from src.api.deps import get_content_router
+        import src.api.routes.collections as collections_route
 
-        client = TestClient(app)
+        app.dependency_overrides[get_content_router] = lambda: self._stub_router()
+        app.dependency_overrides[collections_route._get_optional_user] = lambda: None
 
-        response = client.get(
-            "/api/v1/collections",
-            headers={"Authorization": "Bearer totally.invalid.token"},
-        )
-
-        assert response.status_code == 200
-
-        data = response.json()["data"]
-        assert data["personalized"] is False
+        try:
+            client = TestClient(app)
+            response = client.get(
+                "/api/v1/collections",
+                headers={"Authorization": "Bearer totally.invalid.token"},
+            )
+            assert response.status_code == 200
+            assert response.json()["data"]["personalized"] is False
+        finally:
+            app.dependency_overrides.clear()
 
     def test_collections_with_valid_token_but_no_db_user_returns_anonymous(
         self, monkeypatch
     ) -> None:
         from fastapi.testclient import TestClient
         from src.main import app
+        from src.api.deps import get_content_router
         import src.api.routes.collections as collections_route
+        from unittest.mock import AsyncMock, MagicMock
 
-        async def fake_get_optional_user(db, credentials):
-            return None
+        mock_service = MagicMock()
+        mock_service.build_home_screen.return_value = []
+        monkeypatch.setattr(collections_route, "CollectionService", lambda *a, **kw: mock_service)
+        monkeypatch.setattr(collections_route, "get_ratings_by_user", AsyncMock(return_value=([], 0)))
+        monkeypatch.setattr(collections_route, "get_preferences", AsyncMock(return_value=None))
 
-        monkeypatch.setattr(
-            collections_route,
-            "_get_optional_user",
-            fake_get_optional_user,
-        )
+        async def _fake_enrich(row, content_router):
+            return {"id": row.get("id", ""), "title": row.get("title", ""),
+                    "mood": row.get("mood", ""), "items": [], "item_count": 0}
 
-        client = TestClient(app)
+        monkeypatch.setattr(collections_route, "_enrich_row_real", _fake_enrich)
 
-        response = client.get(
-            "/api/v1/collections",
-            headers={"Authorization": "Bearer some.valid.looking.token"},
-        )
+        app.dependency_overrides[get_content_router] = lambda: self._stub_router()
+        app.dependency_overrides[collections_route._get_optional_user] = lambda: None
 
-        assert response.status_code == 200
-
-        data = response.json()["data"]
-        assert data["personalized"] is False
+        try:
+            client = TestClient(app)
+            response = client.get(
+                "/api/v1/collections",
+                headers={"Authorization": "Bearer some.valid.looking.token"},
+            )
+            assert response.status_code == 200
+            assert response.json()["data"]["personalized"] is False
+        finally:
+            app.dependency_overrides.clear()

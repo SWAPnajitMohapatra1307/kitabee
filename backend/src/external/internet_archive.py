@@ -63,8 +63,9 @@ class InternetArchiveClient:
             return cached
 
         params = {
-            "q": f"{query} AND mediatype:texts",
+            "q": f'(title:{query} OR creator:{query}) AND mediatype:texts',
             "fl[]": "identifier,title,creator,description,subject,date,language,mediatype,licenseurl",
+            "sort[]": "downloads desc",
             "rows": limit,
             "page": page,
             "output": "json",

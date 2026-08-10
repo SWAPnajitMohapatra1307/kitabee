@@ -204,3 +204,186 @@ async def upsert_book_from_google(
         await db.commit()
         await db.refresh(existing)
         return existing
+
+COMIC_VINE_SOURCE = "comic_vine"
+INTERNET_ARCHIVE_SOURCE = "internet_archive"
+
+
+def _book_kwargs_from_comic_vine(data: dict[str, Any]) -> dict[str, Any]:
+    """Translate Comic Vine normalized data into Book ORM fields."""
+    external_id = data.get("external_id")
+    if not external_id:
+        raise ValueError("external_id is required to persist a Comic Vine item")
+
+    now = datetime.now(timezone.utc)
+
+    return {
+        "external_id": str(external_id),
+        "external_source": COMIC_VINE_SOURCE,
+        "title": data.get("title") or "Unknown Title",
+        "subtitle": None,
+        "authors": data.get("authors") or [],
+        "description": data.get("description"),
+        "genres": data.get("genres") or [],
+        "tags": [],
+        "isbn_10": None,
+        "isbn_13": None,
+        "published_year": _extract_published_year(data.get("published_date")),
+        "publisher": data.get("publisher"),
+        "page_count": None,
+        "language": data.get("language") or "en",
+        "cover_url": data.get("cover_url"),
+        "cover_url_large": data.get("cover_url_large"),
+        "average_rating": None,
+        "ratings_count": 0,
+        "kitabee_rating": None,
+        "kitabee_ratings_count": 0,
+        "metadata_json": {},
+        "cached_at": now,
+        "updated_at": now,
+    }
+
+
+def _book_kwargs_from_internet_archive(data: dict[str, Any]) -> dict[str, Any]:
+    """Translate Internet Archive normalized data into Book ORM fields."""
+    external_id = data.get("external_id")
+    if not external_id:
+        raise ValueError("external_id is required to persist an Internet Archive item")
+
+    now = datetime.now(timezone.utc)
+
+    read_url = data.get("free_url") or data.get("read_url")
+    metadata: dict[str, Any] = {}
+    if read_url:
+        metadata["read_url"] = read_url
+
+    return {
+        "external_id": str(external_id),
+        "external_source": INTERNET_ARCHIVE_SOURCE,
+        "title": data.get("title") or "Unknown Title",
+        "subtitle": None,
+        "authors": data.get("authors") or [],
+        "description": data.get("description"),
+        "genres": data.get("genres") or [],
+        "tags": [],
+        "isbn_10": None,
+        "isbn_13": None,
+        "published_year": _extract_published_year(data.get("published_date")),
+        "publisher": None,
+        "page_count": None,
+        "language": data.get("language") or "en",
+        "cover_url": data.get("cover_url"),
+        "cover_url_large": data.get("cover_url_large"),
+        "average_rating": None,
+        "ratings_count": 0,
+        "kitabee_rating": None,
+        "kitabee_ratings_count": 0,
+        "metadata_json": metadata,
+        "cached_at": now,
+        "updated_at": now,
+    }
+
+
+async def upsert_book_from_comic_vine(
+    db: AsyncSession,
+    data: dict[str, Any],
+) -> Book:
+    """Create or update a book row from Comic Vine normalized data.
+
+    Accepts output from content_normalizer.normalize_comic_vine_issue()
+    or normalize_comic_vine_volume(). Uses external_id + external_source
+    as the unique key.
+
+    Args:
+        db: Active async SQLAlchemy session.
+        data: Normalized ContentItem dict from the Comic Vine normalizer.
+
+    Returns:
+        Persisted Book ORM instance.
+    """
+    values = _book_kwargs_from_comic_vine(data)
+
+    existing = await get_book_by_external_id(
+        db=db,
+        external_id=values["external_id"],
+        external_source=values["external_source"],
+    )
+
+    if existing is not None:
+        _apply_book_updates(existing, values)
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    book = Book(**values)
+    db.add(book)
+
+    try:
+        await db.commit()
+        await db.refresh(book)
+        return book
+    except IntegrityError:
+        await db.rollback()
+        existing = await get_book_by_external_id(
+            db=db,
+            external_id=values["external_id"],
+            external_source=values["external_source"],
+        )
+        if existing is None:
+            raise
+        _apply_book_updates(existing, values)
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+
+async def upsert_book_from_internet_archive(
+    db: AsyncSession,
+    data: dict[str, Any],
+) -> Book:
+    """Create or update a book row from Internet Archive normalized data.
+
+    Accepts output from content_normalizer.normalize_internet_archive().
+    Uses external_id + external_source as the unique key.
+
+    Args:
+        db: Active async SQLAlchemy session.
+        data: Normalized ContentItem dict from the IA normalizer.
+
+    Returns:
+        Persisted Book ORM instance.
+    """
+    values = _book_kwargs_from_internet_archive(data)
+
+    existing = await get_book_by_external_id(
+        db=db,
+        external_id=values["external_id"],
+        external_source=values["external_source"],
+    )
+
+    if existing is not None:
+        _apply_book_updates(existing, values)
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    book = Book(**values)
+    db.add(book)
+
+    try:
+        await db.commit()
+        await db.refresh(book)
+        return book
+    except IntegrityError:
+        await db.rollback()
+        existing = await get_book_by_external_id(
+            db=db,
+            external_id=values["external_id"],
+            external_source=values["external_source"],
+        )
+        if existing is None:
+            raise
+        _apply_book_updates(existing, values)
+        await db.commit()
+        await db.refresh(existing)
+        return existing

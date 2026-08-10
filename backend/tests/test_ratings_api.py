@@ -1,26 +1,34 @@
 """Tests for the ratings API endpoints.
 
 Endpoints covered:
-    POST   /api/v1/books/{book_id}/ratings
-    GET    /api/v1/books/{book_id}/ratings/me
-    DELETE /api/v1/books/{book_id}/ratings/me
+    POST   /api/v1/books/{content_id}/ratings
+    GET    /api/v1/books/{content_id}/ratings/me
+    DELETE /api/v1/books/{content_id}/ratings/me
     GET    /api/v1/users/me/ratings
+
+content_id uses gb:/cv:/ia: prefix convention.
+_resolve_to_book_uuid is stubbed to avoid DB + external API calls.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 import pytest
-import httpx
 from fastapi.testclient import TestClient
 
 from src.auth.dependencies import get_current_user
 from src.main import app
+import src.api.routes.ratings as ratings_route
 
-# Fixtures
+
+_KNOWN_CONTENT_ID = "gb:test123"
+_KNOWN_CV_ID = "cv:456"
+_KNOWN_IA_ID = "ia:pg1342"
+_RESOLVED_UUID = uuid4()
+
 
 @pytest.fixture
 def fake_user():
@@ -50,7 +58,7 @@ def fake_rating(fake_user):
     return SimpleNamespace(
         id=uuid4(),
         user_id=fake_user.id,
-        book_id=uuid4(),
+        book_id=_RESOLVED_UUID,
         rating=4,
         review_title="Great read",
         review_text="Really enjoyed it.",
@@ -67,28 +75,33 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
-# Helpers
+@pytest.fixture
+def stub_resolve(monkeypatch: pytest.MonkeyPatch):
+    async def _fake_resolve(content_id, content_router, rating_service):
+        return _RESOLVED_UUID
+    monkeypatch.setattr(ratings_route, "_resolve_to_book_uuid", _fake_resolve)
+
 
 def _auth(fake_user):
     app.dependency_overrides[get_current_user] = lambda: fake_user
 
 
-# POST /api/v1/books/{book_id}/ratings
-
 class TestRateBook:
-    def test_create_rating_returns_200(self, fake_user, fake_rating, monkeypatch):
+    def test_create_rating_returns_200(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def rate_book(self, *, user_id, book_id, payload):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{fake_rating.book_id}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 4, "review_title": "Great read", "review_text": "Really enjoyed it.", "is_spoiler": False},
             )
 
@@ -98,7 +111,7 @@ class TestRateBook:
         assert body["data"]["rating"] == 4
         assert body["data"]["review_title"] == "Great read"
 
-    def test_create_rating_minimum_fields(self, fake_user, fake_rating, monkeypatch):
+    def test_create_rating_minimum_fields(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
         minimal = SimpleNamespace(**vars(fake_rating))
         minimal.rating = 5
@@ -109,19 +122,21 @@ class TestRateBook:
             def __init__(self, db): pass
             async def rate_book(self, *, user_id, book_id, payload):
                 return minimal
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{fake_rating.book_id}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 5},
             )
 
         assert resp.status_code == 200
         assert resp.json()["data"]["rating"] == 5
 
-    def test_create_rating_updates_existing(self, fake_user, fake_rating, monkeypatch):
+    def test_create_rating_updates_existing(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
         updated = SimpleNamespace(**vars(fake_rating))
         updated.rating = 2
@@ -130,47 +145,49 @@ class TestRateBook:
             def __init__(self, db): pass
             async def rate_book(self, *, user_id, book_id, payload):
                 return updated
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{fake_rating.book_id}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 2},
             )
 
         assert resp.status_code == 200
         assert resp.json()["data"]["rating"] == 2
 
-    def test_create_rating_missing_rating_field(self, fake_user, monkeypatch):
+    def test_create_rating_missing_rating_field(self, fake_user, stub_resolve):
         _auth(fake_user)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{uuid4()}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"review_text": "No star given"},
             )
 
         assert resp.status_code == 422
         assert resp.json()["success"] is False
 
-    def test_create_rating_below_minimum(self, fake_user, monkeypatch):
+    def test_create_rating_below_minimum(self, fake_user, stub_resolve):
         _auth(fake_user)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{uuid4()}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 0},
             )
 
         assert resp.status_code == 422
 
-    def test_create_rating_above_maximum(self, fake_user, monkeypatch):
+    def test_create_rating_above_maximum(self, fake_user, stub_resolve):
         _auth(fake_user)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{uuid4()}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 6},
             )
 
@@ -179,25 +196,27 @@ class TestRateBook:
     def test_create_rating_requires_auth(self):
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{uuid4()}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 3},
             )
 
         assert resp.status_code == 403
 
-    def test_create_rating_envelope_shape(self, fake_user, fake_rating, monkeypatch):
+    def test_create_rating_envelope_shape(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def rate_book(self, *, user_id, book_id, payload):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.post(
-                f"/api/v1/books/{fake_rating.book_id}/ratings",
+                f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings",
                 json={"rating": 4},
             )
 
@@ -206,60 +225,104 @@ class TestRateBook:
         assert "data" in body
         assert "meta" in body
 
+    def test_cv_content_id_accepted(self, fake_user, fake_rating, stub_resolve, monkeypatch):
+        _auth(fake_user)
 
-# GET /api/v1/books/{book_id}/ratings/me
+        class StubService:
+            def __init__(self, db): pass
+            async def rate_book(self, *, user_id, book_id, payload):
+                return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
+
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
+
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/v1/books/{_KNOWN_CV_ID}/ratings",
+                json={"rating": 4},
+            )
+
+        assert resp.status_code == 200
+
+    def test_ia_content_id_accepted(self, fake_user, fake_rating, stub_resolve, monkeypatch):
+        _auth(fake_user)
+
+        class StubService:
+            def __init__(self, db): pass
+            async def rate_book(self, *, user_id, book_id, payload):
+                return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
+
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
+
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/v1/books/{_KNOWN_IA_ID}/ratings",
+                json={"rating": 3},
+            )
+
+        assert resp.status_code == 200
+
 
 class TestGetMyBookRating:
-    def test_returns_rating_when_exists(self, fake_user, fake_rating, monkeypatch):
+    def test_returns_rating_when_exists(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def get_my_rating(self, *, user_id, book_id):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.get(f"/api/v1/books/{fake_rating.book_id}/ratings/me")
+            resp = client.get(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.status_code == 200
         assert resp.json()["data"]["rating"] == 4
 
-    def test_returns_404_when_not_rated(self, fake_user, monkeypatch):
+    def test_returns_404_when_not_rated(self, fake_user, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def get_my_rating(self, *, user_id, book_id):
                 return None
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.get(f"/api/v1/books/{uuid4()}/ratings/me")
+            resp = client.get(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "RATING_NOT_FOUND"
 
     def test_requires_auth(self):
         with TestClient(app) as client:
-            resp = client.get(f"/api/v1/books/{uuid4()}/ratings/me")
+            resp = client.get(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.status_code == 403
 
-    def test_response_has_correct_fields(self, fake_user, fake_rating, monkeypatch):
+    def test_response_has_correct_fields(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def get_my_rating(self, *, user_id, book_id):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.get(f"/api/v1/books/{fake_rating.book_id}/ratings/me")
+            resp = client.get(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         data = resp.json()["data"]
         assert "id" in data
@@ -269,7 +332,7 @@ class TestGetMyBookRating:
         assert "helpful_count" in data
         assert "created_at" in data
 
-    def test_spoiler_flag_returned(self, fake_user, fake_rating, monkeypatch):
+    def test_spoiler_flag_returned(self, fake_user, fake_rating, stub_resolve, monkeypatch):
         _auth(fake_user)
         fake_rating.is_spoiler = True
 
@@ -277,75 +340,79 @@ class TestGetMyBookRating:
             def __init__(self, db): pass
             async def get_my_rating(self, *, user_id, book_id):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.get(f"/api/v1/books/{fake_rating.book_id}/ratings/me")
+            resp = client.get(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.json()["data"]["is_spoiler"] is True
 
 
-# DELETE /api/v1/books/{book_id}/ratings/me
-
 class TestDeleteMyBookRating:
-    def test_delete_existing_rating(self, fake_user, monkeypatch):
+    def test_delete_existing_rating(self, fake_user, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def delete_my_rating(self, *, user_id, book_id):
                 return True
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.delete(f"/api/v1/books/{uuid4()}/ratings/me")
+            resp = client.delete(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.status_code == 200
         assert resp.json()["data"]["message"] == "Rating deleted successfully."
 
-    def test_delete_nonexistent_rating_returns_404(self, fake_user, monkeypatch):
+    def test_delete_nonexistent_rating_returns_404(self, fake_user, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def delete_my_rating(self, *, user_id, book_id):
                 return False
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.delete(f"/api/v1/books/{uuid4()}/ratings/me")
+            resp = client.delete(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "RATING_NOT_FOUND"
 
     def test_delete_requires_auth(self):
         with TestClient(app) as client:
-            resp = client.delete(f"/api/v1/books/{uuid4()}/ratings/me")
+            resp = client.delete(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         assert resp.status_code == 403
 
-    def test_delete_envelope_shape(self, fake_user, monkeypatch):
+    def test_delete_envelope_shape(self, fake_user, stub_resolve, monkeypatch):
         _auth(fake_user)
 
         class StubService:
             def __init__(self, db): pass
             async def delete_my_rating(self, *, user_id, book_id):
                 return True
+            async def resolve_content_id(self, content_id):
+                return _RESOLVED_UUID
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
-            resp = client.delete(f"/api/v1/books/{uuid4()}/ratings/me")
+            resp = client.delete(f"/api/v1/books/{_KNOWN_CONTENT_ID}/ratings/me")
 
         body = resp.json()
         assert body["success"] is True
         assert "meta" in body
 
-
-# GET /api/v1/users/me/ratings
 
 class TestGetMyRatings:
     def test_returns_paginated_ratings(self, fake_user, fake_rating, monkeypatch):
@@ -356,7 +423,7 @@ class TestGetMyRatings:
             async def get_my_ratings(self, *, user_id, limit, offset):
                 return [fake_rating], 1
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.get("/api/v1/users/me/ratings")
@@ -375,7 +442,7 @@ class TestGetMyRatings:
             async def get_my_ratings(self, *, user_id, limit, offset):
                 return [], 0
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.get("/api/v1/users/me/ratings")
@@ -395,7 +462,7 @@ class TestGetMyRatings:
                 captured["offset"] = offset
                 return [], 0
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             client.get("/api/v1/users/me/ratings?limit=10&offset=5")
@@ -414,7 +481,7 @@ class TestGetMyRatings:
                 captured["offset"] = offset
                 return [], 0
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             client.get("/api/v1/users/me/ratings")
@@ -460,7 +527,7 @@ class TestGetMyRatings:
             async def get_my_ratings(self, *, user_id, limit, offset):
                 return [], 0
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.get("/api/v1/users/me/ratings")
@@ -478,7 +545,7 @@ class TestGetMyRatings:
             async def get_my_ratings(self, *, user_id, limit, offset):
                 return [], 0
 
-        monkeypatch.setattr("src.api.routes.ratings.RatingService", StubService)
+        monkeypatch.setattr(ratings_route, "RatingService", StubService)
 
         with TestClient(app) as client:
             resp = client.get("/api/v1/users/me/ratings")

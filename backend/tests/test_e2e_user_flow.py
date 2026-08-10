@@ -274,22 +274,46 @@ class TestE2EUpdateProfile:
 # Step 5 — Rate a book
 # ---------------------------------------------------------------------------
 
+
+_CONTENT_ID = "gb:e2ebook123"
+
+
+class _StubRouter:
+    async def search(self, query, limit, sources=None): return []
+    async def get_by_content_id(self, content_id): return None
+    async def get_similar(self, content_id, limit): return []
+
+
 class TestE2ERateBook:
     async def test_rate_book_returns_rating(self, authed_client, monkeypatch):
         fake_rating = _make_rating()
+
+        import src.api.routes.ratings as ratings_route
+        from src.api.deps import get_content_router
+
+        class _StubRouter:
+            async def search(self, query, limit, sources=None): return []
+            async def get_by_content_id(self, content_id): return None
+            async def get_similar(self, content_id, limit): return []
+
+        async def _fake_resolve(content_id, content_router, rating_service):
+            return _BOOK_ID
+
+        monkeypatch.setattr(ratings_route, "_resolve_to_book_uuid", _fake_resolve)
 
         class StubRatingService:
             def __init__(self, db): pass
             async def rate_book(self, *, user_id, book_id, payload):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _BOOK_ID
 
-        monkeypatch.setattr(
-            "src.api.routes.ratings.RatingService", StubRatingService
-        )
+        monkeypatch.setattr(ratings_route, "RatingService", StubRatingService)
+        app.dependency_overrides[get_content_router] = lambda: _StubRouter()
 
         async with authed_client as c:
             resp = await c.post(
-                f"/api/v1/books/{_BOOK_ID}/ratings",
+                f"/api/v1/books/gb:e2ebook123/ratings",
                 json={
                     "rating": 4,
                     "review_title": "Great book",
@@ -305,25 +329,35 @@ class TestE2ERateBook:
         assert body["data"]["review_title"] == "Great book"
 
 
-# ---------------------------------------------------------------------------
-# Step 6 — Get my rating
-# ---------------------------------------------------------------------------
-
 class TestE2EGetMyRating:
     async def test_get_my_rating_returns_rating(self, authed_client, monkeypatch):
         fake_rating = _make_rating()
+
+        import src.api.routes.ratings as ratings_route
+        from src.api.deps import get_content_router
+
+        class _StubRouter:
+            async def search(self, query, limit, sources=None): return []
+            async def get_by_content_id(self, content_id): return None
+            async def get_similar(self, content_id, limit): return []
+
+        async def _fake_resolve(content_id, content_router, rating_service):
+            return _BOOK_ID
+
+        monkeypatch.setattr(ratings_route, "_resolve_to_book_uuid", _fake_resolve)
 
         class StubRatingService:
             def __init__(self, db): pass
             async def get_my_rating(self, *, user_id, book_id):
                 return fake_rating
+            async def resolve_content_id(self, content_id):
+                return _BOOK_ID
 
-        monkeypatch.setattr(
-            "src.api.routes.ratings.RatingService", StubRatingService
-        )
+        monkeypatch.setattr(ratings_route, "RatingService", StubRatingService)
+        app.dependency_overrides[get_content_router] = lambda: _StubRouter()
 
         async with authed_client as c:
-            resp = await c.get(f"/api/v1/books/{_BOOK_ID}/ratings/me")
+            resp = await c.get("/api/v1/books/gb:e2ebook123/ratings/me")
 
         assert resp.status_code == 200
         body = resp.json()
@@ -332,42 +366,61 @@ class TestE2EGetMyRating:
     async def test_get_my_rating_not_found_returns_404(
         self, authed_client, monkeypatch
     ):
+        import src.api.routes.ratings as ratings_route
+        from src.api.deps import get_content_router
+
+        class _StubRouter:
+            async def search(self, query, limit, sources=None): return []
+            async def get_by_content_id(self, content_id): return None
+            async def get_similar(self, content_id, limit): return []
+
+        async def _fake_resolve(content_id, content_router, rating_service):
+            return _BOOK_ID
+
+        monkeypatch.setattr(ratings_route, "_resolve_to_book_uuid", _fake_resolve)
+
         class StubRatingService:
             def __init__(self, db): pass
             async def get_my_rating(self, *, user_id, book_id):
                 return None
+            async def resolve_content_id(self, content_id):
+                return _BOOK_ID
 
-        monkeypatch.setattr(
-            "src.api.routes.ratings.RatingService", StubRatingService
-        )
+        monkeypatch.setattr(ratings_route, "RatingService", StubRatingService)
+        app.dependency_overrides[get_content_router] = lambda: _StubRouter()
 
         async with authed_client as c:
-            resp = await c.get(f"/api/v1/books/{_BOOK_ID}/ratings/me")
+            resp = await c.get("/api/v1/books/gb:e2ebook123/ratings/me")
 
         assert resp.status_code == 404
 
-
-# ---------------------------------------------------------------------------
-# Step 7 — Add book to library
-# ---------------------------------------------------------------------------
 
 class TestE2EAddToLibrary:
     async def test_add_book_returns_201(self, authed_client, monkeypatch):
         fake_item = _make_library_item()
 
+        from src.api.deps import get_content_router
+        import src.api.routes.library as library_route
+
+        class _StubRouter:
+            async def search(self, query, limit, sources=None): return []
+            async def get_by_content_id(self, content_id): return None
+            async def get_similar(self, content_id, limit): return []
+
         class StubLibraryService:
             def __init__(self, db): pass
-            async def add_book(self, *, user_id, payload):
+            async def add_book(self, *, user_id, payload, content_router):
                 return fake_item
+            async def resolve_content_id(self, content_id):
+                return _BOOK_ID
 
-        monkeypatch.setattr(
-            "src.api.routes.library.LibraryService", StubLibraryService
-        )
+        app.dependency_overrides[get_content_router] = lambda: _StubRouter()
+        monkeypatch.setattr(library_route, "LibraryService", lambda db: StubLibraryService(db))
 
         async with authed_client as c:
             resp = await c.post(
                 "/api/v1/library",
-                json={"book_id": str(_BOOK_ID), "status": "want_to_read"},
+                json={"content_id": "gb:e2ebook123", "status": "want_to_read"},
             )
 
         assert resp.status_code == 201
@@ -377,10 +430,17 @@ class TestE2EAddToLibrary:
 
     async def test_add_duplicate_book_returns_409(self, authed_client, monkeypatch):
         from fastapi import HTTPException
+        from src.api.deps import get_content_router
+        import src.api.routes.library as library_route
+
+        class _StubRouter:
+            async def search(self, query, limit, sources=None): return []
+            async def get_by_content_id(self, content_id): return None
+            async def get_similar(self, content_id, limit): return []
 
         class StubLibraryService:
             def __init__(self, db): pass
-            async def add_book(self, *, user_id, payload):
+            async def add_book(self, *, user_id, payload, content_router):
                 raise HTTPException(
                     status_code=409,
                     detail={
@@ -388,23 +448,19 @@ class TestE2EAddToLibrary:
                         "message": "Already in library.",
                     },
                 )
+            async def resolve_content_id(self, content_id):
+                return _BOOK_ID
 
-        monkeypatch.setattr(
-            "src.api.routes.library.LibraryService", StubLibraryService
-        )
+        app.dependency_overrides[get_content_router] = lambda: _StubRouter()
+        monkeypatch.setattr(library_route, "LibraryService", lambda db: StubLibraryService(db))
 
         async with authed_client as c:
             resp = await c.post(
                 "/api/v1/library",
-                json={"book_id": str(_BOOK_ID), "status": "want_to_read"},
+                json={"content_id": "gb:e2ebook123", "status": "want_to_read"},
             )
 
         assert resp.status_code == 409
-
-
-# ---------------------------------------------------------------------------
-# Step 8 — Get library
-# ---------------------------------------------------------------------------
 
 class TestE2EGetLibrary:
     async def test_get_library_returns_results(self, authed_client, monkeypatch):
@@ -603,3 +659,4 @@ class TestE2EDeleteAccount:
             resp = await c.delete("/api/v1/users/me")
 
         assert resp.status_code == 403
+

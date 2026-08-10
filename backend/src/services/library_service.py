@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.database.crud.book import get_book_by_external_id
 from src.database.crud.library import (
     create_library_item,
     delete_library_item,
@@ -16,6 +18,9 @@ from src.database.crud.library import (
 )
 from src.database.models.library_item import Library, LibraryStatus
 from src.schemas.library import LibraryItemAdd, LibraryItemUpdate
+from src.services.content_normalizer import parse_content_id, get_source_for_prefix
+
+logger = logging.getLogger(__name__)
 
 
 class LibraryService:
@@ -29,37 +34,116 @@ class LibraryService:
         """
         self.db = db
 
-    async def add_book(self, *, user_id: UUID, payload: LibraryItemAdd) -> Library:
-        """Add a book to the user's library.
+    async def resolve_content_id(self, content_id: str) -> UUID | None:
+        """Resolve a prefixed content_id to an internal book UUID.
 
-        Raises 409 CONFLICT if the book is already in the library.
+        Args:
+            content_id: Prefixed ID like "gb:ByLKDQAAQBAJ".
+
+        Returns:
+            Internal book UUID, or None when not found in DB.
+        """
+        parsed = parse_content_id(content_id)
+        if parsed is None:
+            logger.warning(
+                "Invalid content_id in library resolution",
+                extra={"content_id": content_id},
+            )
+            return None
+
+        prefix, raw_id = parsed
+        source = get_source_for_prefix(prefix)
+        if source is None:
+            return None
+
+        book = await get_book_by_external_id(
+            self.db,
+            external_id=raw_id,
+            external_source=source,
+        )
+
+        if book is None:
+            logger.info(
+                "Book not in DB for library — fetch via detail endpoint first",
+                extra={"content_id": content_id},
+            )
+            return None
+
+        return book.id
+
+    async def add_book(
+        self,
+        *,
+        user_id: UUID,
+        payload: LibraryItemAdd,
+        content_router: object,
+    ) -> Library:
+        """Add a content item to the user's library.
+
+        Resolves content_id to an internal book UUID. If the book is not
+        yet in the DB, fetches it from the external API first.
 
         Args:
             user_id: UUID of the authenticated user.
-            payload: Validated request body.
+            payload: Validated request body with content_id.
+            content_router: ContentRouter for fetching unknown items.
 
         Returns:
             The newly created Library entry.
 
         Raises:
-            HTTPException: 409 if the book already exists in the library.
+            HTTPException 400: When content_id format is invalid.
+            HTTPException 404: When content cannot be found.
+            HTTPException 409: When book is already in library.
         """
+        if parse_content_id(payload.content_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "INVALID_CONTENT_ID",
+                    "message": f"Invalid content_id format: '{payload.content_id}'.",
+                },
+            )
+
+        book_uuid = await self.resolve_content_id(payload.content_id)
+
+        if book_uuid is None:
+            item = await content_router.get_by_content_id(payload.content_id)
+            if item is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={
+                        "code": "CONTENT_NOT_FOUND",
+                        "message": f"No content found with id {payload.content_id}.",
+                    },
+                )
+            book_uuid = await self.resolve_content_id(payload.content_id)
+
+        if book_uuid is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "code": "CONTENT_NOT_FOUND",
+                    "message": f"Content {payload.content_id} could not be resolved.",
+                },
+            )
+
         existing = await get_library_item(
-            self.db, user_id=user_id, book_id=payload.book_id
+            self.db, user_id=user_id, book_id=book_uuid
         )
         if existing is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "code": "ALREADY_IN_LIBRARY",
-                    "message": "This book is already in your library.",
+                    "message": "This item is already in your library.",
                 },
             )
 
         return await create_library_item(
             self.db,
             user_id=user_id,
-            book_id=payload.book_id,
+            book_id=book_uuid,
             status=payload.status,
             current_page=payload.current_page,
             total_pages=payload.total_pages,
@@ -103,18 +187,16 @@ class LibraryService:
     ) -> Library:
         """Update an existing library entry.
 
-        Only fields present in the payload are applied.
-
         Args:
             user_id: UUID of the authenticated user.
-            book_id: UUID of the book to update.
+            book_id: Internal book UUID.
             payload: Validated partial update body.
 
         Returns:
             The updated Library entry.
 
         Raises:
-            HTTPException: 404 if the entry does not exist.
+            HTTPException 404: When the entry does not exist.
         """
         item = await get_library_item(self.db, user_id=user_id, book_id=book_id)
         if item is None:
@@ -122,7 +204,7 @@ class LibraryService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={
                     "code": "LIBRARY_ITEM_NOT_FOUND",
-                    "message": "This book is not in your library.",
+                    "message": "This item is not in your library.",
                 },
             )
 
@@ -137,9 +219,9 @@ class LibraryService:
 
         Args:
             user_id: UUID of the authenticated user.
-            book_id: UUID of the book to remove.
+            book_id: Internal book UUID.
 
         Returns:
-            True if deleted, False if the entry was not found.
+            True if deleted, False if entry was not found.
         """
         return await delete_library_item(self.db, user_id=user_id, book_id=book_id)

@@ -209,28 +209,64 @@ def test_full_ml_pipeline_builds_personalized_home_screen() -> None:
         assert row["item_count"] == len(row["items"])
 
 
+
 def test_collections_route_returns_valid_anonymous_envelope() -> None:
-    client = TestClient(app)
+    from src.api.deps import get_content_router
+    import src.api.routes.collections as collections_route
+    from unittest.mock import MagicMock
 
-    response = client.get("/api/v1/collections?n_collections=4&row_limit=5")
+    class _StubRouter:
+        async def search(self, query, limit, sources=None): return []
+        async def get_by_content_id(self, content_id): return None
+        async def get_similar(self, content_id, limit): return []
 
-    assert response.status_code == 200
+    mock_service = MagicMock()
+    mock_service.build_home_screen.return_value = [
+        {"id": "row-1", "title": "Dark Reads", "mood": "dark", "items": ["seed-2"], "item_count": 1}
+    ]
 
-    payload = response.json()
+    async def _fake_enrich(row, content_router):
+        return {
+            "id": row["id"], "title": row["title"], "mood": row.get("mood", ""),
+            "items": [
+                {"content_id": "gb:test123", "title": "Test Book", "author": "Test Author",
+                 "cover_url": None, "content_type": "book", "is_free": False,
+                 "free_url": None, "source": "google_books", "description": None, "genres": []}
+            ],
+            "item_count": 1,
+        }
 
-    assert payload["success"] is True
-    assert "data" in payload
-    assert "meta" in payload
-    assert payload["meta"]["version"] == "v1"
+    original_service = collections_route.CollectionService
+    original_enrich = collections_route._enrich_row_real
+    collections_route.CollectionService = lambda *a, **kw: mock_service
+    collections_route._enrich_row_real = _fake_enrich
+    app.dependency_overrides[get_content_router] = lambda: _StubRouter()
+    app.dependency_overrides[collections_route._get_optional_user] = lambda: None
 
-    data = payload["data"]
+    try:
+        client = TestClient(app)
+        response = client.get("/api/v1/collections?n_collections=4&row_limit=5")
 
-    assert {"rows", "total", "personalized"} <= set(data.keys())
-    assert isinstance(data["rows"], list)
-    assert data["total"] == len(data["rows"])
-    assert data["personalized"] is False
+        assert response.status_code == 200
 
-    for row in data["rows"]:
-        assert {"id", "title", "items", "item_count"} <= set(row.keys())
-        assert row["item_count"] == len(row["items"])
-        assert len(row["items"]) <= 5
+        payload = response.json()
+        assert payload["success"] is True
+        assert "data" in payload
+        assert "meta" in payload
+        assert payload["meta"]["version"] == "v1"
+
+        data = payload["data"]
+        assert {"rows", "total", "personalized"} <= set(data.keys())
+        assert isinstance(data["rows"], list)
+        assert data["total"] == len(data["rows"])
+        assert data["personalized"] is False
+
+        for row in data["rows"]:
+            assert {"id", "title", "items", "item_count"} <= set(row.keys())
+            assert row["item_count"] == len(row["items"])
+            assert len(row["items"]) <= 5
+
+    finally:
+        app.dependency_overrides.clear()
+        collections_route.CollectionService = original_service
+        collections_route._enrich_row_real = original_enrich

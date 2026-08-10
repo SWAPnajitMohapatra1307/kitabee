@@ -16,6 +16,8 @@ from src.api.routes.series import router as series_router
 from src.api.routes.collections import router as collections_router
 from src.cache.redis_client import redis_client
 from src.external.google_books import GoogleBooksClient
+from src.external.comic_vine import ComicVineClient
+from src.external.internet_archive import InternetArchiveClient
 
 
 logger = logging.getLogger(__name__)
@@ -26,13 +28,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application startup and shutdown.
 
     Startup:
-    - Connect to Redis. Cache failures at startup are non-fatal — the
-      app still serves requests, cache operations degrade to misses.
-    - Instantiate a single GoogleBooksClient stored on app.state so all
-      requests share one httpx connection pool.
+    - Connect to Redis. Cache failures at startup are non-fatal.
+    - Instantiate shared API clients stored on app.state so all
+      requests share one httpx connection pool per client.
 
     Shutdown:
-    - Close the Google Books client.
+    - Close all API clients.
     - Close the Redis connection pool.
     """
     try:
@@ -46,10 +47,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.google_books_client = GoogleBooksClient()
     logger.info("Google Books client initialized")
 
+    app.state.comic_vine_client = ComicVineClient()
+    logger.info("Comic Vine client initialized")
+
+    app.state.internet_archive_client = InternetArchiveClient()
+    logger.info("Internet Archive client initialized")
+
     yield
 
     await app.state.google_books_client.close()
     logger.info("Google Books client closed")
+
+    await app.state.comic_vine_client.close()
+    logger.info("Comic Vine client closed")
+
+    await app.state.internet_archive_client.close()
+    logger.info("Internet Archive client closed")
 
     await redis_client.close()
 
@@ -60,8 +73,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-# Exception handlers — normalize all errors to the standard envelope
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(
@@ -84,12 +95,7 @@ async def http_exception_handler(
     request: Request,
     exc: HTTPException,
 ) -> JSONResponse:
-    """Convert HTTPException into the standard error envelope.
-
-    Accepts two detail shapes:
-    - A dict with keys 'code' and 'message' (our preferred style).
-    - A plain string (FastAPI default) — mapped to a generic code.
-    """
+    """Convert HTTPException into the standard error envelope."""
     if isinstance(exc.detail, dict) and "code" in exc.detail and "message" in exc.detail:
         code = exc.detail["code"]
         message = exc.detail["message"]

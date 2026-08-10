@@ -131,3 +131,77 @@ class BookDetailResponse(BaseModel):
         default_factory=dict,
         description="Extra fields from the source API (preview links, etc.).",
     )
+
+
+class ContentItemResponse(BaseModel):
+    """Unified response shape for any content item regardless of source.
+
+    Used by:
+        GET /api/v1/books/{content_id}
+        GET /api/v1/books/{content_id}/similar
+        GET /api/v1/collections (items inside rows)
+
+    The content_id field uses the prefixed convention:
+        gb:{id}  — Google Books
+        cv:{id}  — Comic Vine
+        ia:{id}  — Internet Archive
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    content_id: str = Field(
+        ...,
+        description="Prefixed canonical identifier (gb:, cv:, ia:).",
+    )
+    external_id: str = Field(
+        ...,
+        description="Raw ID from the external source.",
+    )
+    external_source: str = Field(
+        ...,
+        description="Source API: google_books, comic_vine, internet_archive.",
+    )
+    title: str
+    author: Optional[str] = Field(
+        None,
+        description="Primary author display string (joined from authors list).",
+    )
+    authors: list[str] = Field(default_factory=list)
+    description: Optional[str] = None
+    cover_url: Optional[str] = None
+    cover_url_large: Optional[str] = None
+    content_type: str = Field(
+        "book",
+        description="'book' or 'comic'.",
+    )
+    is_free: bool = Field(
+        False,
+        description="True for Internet Archive public domain content.",
+    )
+    free_url: Optional[str] = Field(
+        None,
+        description="Direct read URL when is_free is True.",
+    )
+    genres: list[str] = Field(default_factory=list)
+    language: str = "en"
+    publisher: Optional[str] = None
+    published_date: Optional[str] = None
+    page_count: Optional[int] = Field(None, gt=0)
+    isbn_10: Optional[str] = None
+    isbn_13: Optional[str] = None
+    average_rating: Optional[float] = Field(None, ge=0, le=5)
+    rating_count: int = Field(0, ge=0)
+    series_id: Optional[str] = None
+    series_order: Optional[str] = None
+    source: str = Field(
+        ...,
+        description="Source string matching external_source.",
+    )
+    
+class ContentItemListResponse(BaseModel):
+    """Paginated list of ContentItemResponse objects."""
+
+    total_count: int = Field(..., ge=0)
+    limit: int = Field(..., ge=1)
+    offset: int = Field(..., ge=0)
+    results: list[ContentItemResponse]
