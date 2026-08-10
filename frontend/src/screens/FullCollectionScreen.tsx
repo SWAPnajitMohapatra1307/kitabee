@@ -75,7 +75,7 @@ const FullCollectionScreen: React.FC = () => {
           <View style={{ marginBottom: spacing.xs }}>
             <ContentCard
               item={item}
-              onPress={(i) => console.log("Tap item:", i.title)}
+           onPress={(i) => navigation.navigate("BookDetail", { content_id: i.content_id })}
             />
           </View>
         )}
