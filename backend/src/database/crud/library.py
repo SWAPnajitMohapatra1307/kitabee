@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.database.models.library_item import Library, LibraryStatus
 
@@ -16,7 +17,7 @@ async def get_library_item(
     user_id: UUID,
     book_id: UUID,
 ) -> Library | None:
-    """Fetch a single library entry by user and book.
+    """Fetch a single library entry by user and book, with book relationship loaded.
 
     Args:
         db: Active async database session.
@@ -24,10 +25,12 @@ async def get_library_item(
         book_id: UUID of the book.
 
     Returns:
-        The Library row, or None if not found.
+        The Library row with book eagerly loaded, or None if not found.
     """
     result = await db.execute(
-        select(Library).where(
+        select(Library)
+        .options(selectinload(Library.book))
+        .where(
             Library.user_id == user_id,
             Library.book_id == book_id,
         )
@@ -45,6 +48,9 @@ async def get_library_items_by_user(
 ) -> tuple[list[Library], int]:
     """Fetch paginated library entries for a user, with optional status filter.
 
+    Eagerly loads the book relationship so callers can access
+    book.external_id and book.external_source without additional queries.
+
     Args:
         db: Active async database session.
         user_id: UUID of the owning user.
@@ -55,7 +61,11 @@ async def get_library_items_by_user(
     Returns:
         Tuple of (list of Library rows, total count).
     """
-    base_query = select(Library).where(Library.user_id == user_id)
+    base_query = (
+        select(Library)
+        .options(selectinload(Library.book))
+        .where(Library.user_id == user_id)
+    )
     count_query = select(func.count()).where(Library.user_id == user_id)
 
     if status is not None:
@@ -97,7 +107,7 @@ async def create_library_item(
         is_favorite: Whether the book is marked as favourite.
 
     Returns:
-        The newly created Library row.
+        The newly created Library row with book eagerly loaded.
     """
     item = Library(
         user_id=user_id,
@@ -110,8 +120,13 @@ async def create_library_item(
     )
     db.add(item)
     await db.flush()
-    await db.refresh(item)
-    return item
+
+    result = await db.execute(
+        select(Library)
+        .options(selectinload(Library.book))
+        .where(Library.id == item.id)
+    )
+    return result.scalar_one()
 
 
 async def update_library_item(
@@ -122,7 +137,6 @@ async def update_library_item(
     """Apply partial updates to an existing library entry.
 
     Only the keyword arguments provided are written to the row.
-    Timestamps are managed by the caller or database defaults.
 
     Args:
         db: Active async database session.
@@ -130,7 +144,7 @@ async def update_library_item(
         **fields: Column-value pairs to update.
 
     Returns:
-        The updated Library row.
+        The updated Library row with book eagerly loaded.
     """
     from datetime import datetime, timezone
 
@@ -139,8 +153,13 @@ async def update_library_item(
 
     item.updated_at = datetime.now(timezone.utc)
     await db.flush()
-    await db.refresh(item)
-    return item
+
+    result = await db.execute(
+        select(Library)
+        .options(selectinload(Library.book))
+        .where(Library.id == item.id)
+    )
+    return result.scalar_one()
 
 
 async def delete_library_item(

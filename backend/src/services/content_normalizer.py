@@ -147,7 +147,7 @@ def normalize_comic_vine_issue(raw: dict[str, Any]) -> Optional[dict[str, Any]]:
         "cover_url_large": raw.get("cover_image"),
         "content_type": "comic",
         "is_free": False,
-        "free_url": None,
+        "free_url": raw.get("detail_url"),
         "genres": [],
         "language": "en",
         "publisher": None,

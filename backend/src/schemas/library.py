@@ -10,12 +10,13 @@ Defines request and response shapes for:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.database.models.library_item import LibraryStatus
+from src.services.content_normalizer import SOURCE_TO_PREFIX
 
 
 class LibraryItemAdd(BaseModel):
@@ -60,6 +61,7 @@ class LibraryItemResponse(BaseModel):
     id: UUID
     user_id: UUID
     book_id: UUID
+    content_id: str
     status: LibraryStatus
     current_page: Optional[int] = None
     total_pages: Optional[int] = None
@@ -69,6 +71,57 @@ class LibraryItemResponse(BaseModel):
     is_favorite: bool
     added_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def inject_content_id(cls, data: Any) -> Any:
+        """Compute content_id from the joined book's external_source and external_id.
+
+        When data is an ORM Library instance, reads data.book.external_source
+        and data.book.external_id to construct the prefixed content_id.
+
+        Args:
+            data: Raw input — either an ORM instance or a dict.
+
+        Returns:
+            The input unchanged if content_id is already present,
+            otherwise with content_id injected.
+        """
+        if isinstance(data, dict):
+            if "content_id" not in data:
+                source = data.get("external_source") or ""
+                prefix = SOURCE_TO_PREFIX.get(source, "")
+                raw_id = data.get("external_id") or ""
+                data["content_id"] = f"{prefix}:{raw_id}" if prefix and raw_id else ""
+            return data
+
+        # ORM instance path
+        book = getattr(data, "book", None)
+        if book is not None:
+            source = getattr(book, "external_source", "") or ""
+            prefix = SOURCE_TO_PREFIX.get(source, "")
+            raw_id = getattr(book, "external_id", "") or ""
+            content_id = f"{prefix}:{raw_id}" if prefix and raw_id else ""
+        else:
+            content_id = ""
+
+        # Pydantic model_validator mode="before" on ORM objects:
+        # must return a dict that Pydantic can use to build the model.
+        return {
+            "id": data.id,
+            "user_id": data.user_id,
+            "book_id": data.book_id,
+            "content_id": content_id,
+            "status": data.status,
+            "current_page": data.current_page,
+            "total_pages": data.total_pages,
+            "started_reading_at": data.started_reading_at,
+            "finished_reading_at": data.finished_reading_at,
+            "notes": data.notes,
+            "is_favorite": data.is_favorite,
+            "added_at": data.added_at,
+            "updated_at": data.updated_at,
+        }
 
 
 class MyLibraryResponse(BaseModel):

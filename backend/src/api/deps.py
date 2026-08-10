@@ -58,12 +58,18 @@ def get_internet_archive_client(request: Request) -> InternetArchiveClient:
 async def get_db() -> AsyncIterator[AsyncSession]:
     """Yield a database session for the current request.
 
+    Commits on success, rolls back on exception, always closes.
+
     Yields:
         An active AsyncSession bound to the current request lifecycle.
     """
     async with AsyncSessionLocal() as session:
-        yield session
-
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 async def get_book_service(
     request: Request,
