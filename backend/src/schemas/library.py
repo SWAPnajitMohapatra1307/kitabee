@@ -69,6 +69,9 @@ class LibraryItemResponse(BaseModel):
     finished_reading_at: Optional[datetime] = None
     notes: Optional[str] = None
     is_favorite: bool
+    title: Optional[str] = None
+    cover_url: Optional[str] = None
+    authors: Optional[list[str]] = None
     added_at: datetime
     updated_at: datetime
 
@@ -102,8 +105,14 @@ class LibraryItemResponse(BaseModel):
             prefix = SOURCE_TO_PREFIX.get(source, "")
             raw_id = getattr(book, "external_id", "") or ""
             content_id = f"{prefix}:{raw_id}" if prefix and raw_id else ""
+            book_title = getattr(book, "title", None)
+            book_cover = getattr(book, "cover_url", None)
+            book_authors = getattr(book, "authors", None)
         else:
             content_id = ""
+            book_title = None
+            book_cover = None
+            book_authors = None
 
         # Pydantic model_validator mode="before" on ORM objects:
         # must return a dict that Pydantic can use to build the model.
@@ -121,6 +130,8 @@ class LibraryItemResponse(BaseModel):
             "is_favorite": data.is_favorite,
             "added_at": data.added_at,
             "updated_at": data.updated_at,
+            "cover_url": book_cover,
+            "authors": book_authors,
         }
 
 
