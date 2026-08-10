@@ -157,8 +157,7 @@ class Personalizer:
         # find highest rated item
         best = max(user_ratings, key=lambda r: float(r["rating"]))
         anchor_id = str(best["content_id"])
-        anchor_meta = meta_map.get(anchor_id, {})
-        anchor_title = anchor_meta.get("title", anchor_id)
+        anchor_title = best.get("title") or meta_map.get(anchor_id, {}).get("title", anchor_id)
 
         return {
             "label": f"Because you loved {anchor_title}",

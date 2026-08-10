@@ -27,6 +27,8 @@ async def get_rating(
     return result.scalar_one_or_none()
 
 
+from sqlalchemy.orm import selectinload
+
 async def get_ratings_by_user(
     db: AsyncSession,
     *,
@@ -42,6 +44,7 @@ async def get_ratings_by_user(
 
     rows_result = await db.execute(
         select(Rating)
+        .options(selectinload(Rating.book))
         .where(Rating.user_id == user_id)
         .order_by(Rating.created_at.desc())
         .limit(limit)

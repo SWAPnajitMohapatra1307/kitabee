@@ -1,7 +1,7 @@
 """API routes for Netflix-style collection rows.
 
 Endpoints:
-    GET /api/v1/collections  — home screen themed rows
+    GET /api/v1/collections  - home screen themed rows
 
 Collections are now enriched with real data from Google Books,
 Comic Vine, and Internet Archive based on the seed catalog source field.
@@ -198,22 +198,19 @@ _CATALOG_BY_ID: dict[str, dict[str, Any]] = {
 }
 
 
+def _source_prefix(external_source: str) -> str:
+    if external_source == SOURCE_COMIC_VINE:
+        return "cv"
+    if external_source == SOURCE_INTERNET_ARCHIVE:
+        return "ia"
+    return "gb"
+
+
 async def _enrich_item_real(
     seed: dict[str, Any],
     content_router: ContentRouter,
 ) -> dict[str, Any] | None:
-    """Fetch real metadata for a seed item from the appropriate external API.
-
-    Search query from seed is used to find the best matching item.
-    Falls back to a minimal placeholder if the API call fails.
-
-    Args:
-        seed: Seed catalog entry with title, source, search_query fields.
-        content_router: Injected ContentRouter for dispatching API calls.
-
-    Returns:
-        Enriched ContentItem dict, or None on complete failure.
-    """
+    """Fetch real metadata for a seed item from the appropriate external API."""
     source = seed.get("source", SOURCE_GOOGLE_BOOKS)
     query = seed.get("search_query") or seed.get("title", "")
 
@@ -268,18 +265,7 @@ async def _enrich_row_real(
     row: dict[str, Any],
     content_router: ContentRouter,
 ) -> dict[str, Any]:
-    """Enrich all items in a collection row with real API data.
-
-    Fires all item enrichment calls concurrently. Failed items are
-    dropped silently — a row with fewer items is better than a 500.
-
-    Args:
-        row: Collection row dict with items list of seed IDs.
-        content_router: ContentRouter for API dispatch.
-
-    Returns:
-        Row dict with items replaced by real ContentItem dicts.
-    """
+    """Enrich all items in a collection row with real API data."""
     raw_items = row.get("items", [])
     seeds: list[dict[str, Any]] = []
 
@@ -346,26 +332,7 @@ async def get_collections(
     db: AsyncSession = Depends(get_db),
     content_router: ContentRouter = Depends(get_content_router),
 ) -> dict[str, Any]:
-    """Return themed collection rows for the home screen.
-
-    Each row is enriched with real metadata from Google Books, Comic Vine,
-    or Internet Archive depending on the seed source field. Enrichment
-    calls are fired concurrently per row.
-
-    Anonymous users receive genre and mood rows.
-    Authenticated users also receive personalized rows.
-
-    Args:
-        request: FastAPI request (needed for ContentRouter dependency).
-        n_collections: Number of rows to return (1-20, default 6).
-        row_limit: Max items per row (1-50, default 20).
-        current_user: Authenticated user or None.
-        db: Database session.
-        content_router: ContentRouter for all three API sources.
-
-    Returns:
-        Success envelope with rows, total, and personalized flag.
-    """
+    """Return themed collection rows for the home screen."""
     user_id: str | None = None
     user_ratings: list[dict[str, Any]] = []
     content_preference = "both"
@@ -379,14 +346,18 @@ async def get_collections(
             limit=100,
             offset=0,
         )
-        user_ratings = [
-            {
+
+        for r in ratings_result:
+            if r.book is None:
+                continue
+            prefix = _source_prefix(r.book.external_source)
+            content_id = f"{prefix}:{r.book.external_id}"
+            user_ratings.append({
                 "user_id": str(current_user.id),
-                "content_id": str(r.book_id),
+                "content_id": content_id,
                 "rating": float(r.rating),
-            }
-            for r in ratings_result
-        ]
+                "title": r.book.title,
+            })
 
         prefs = await get_preferences(db, user_id=current_user.id)
         if prefs is not None and hasattr(prefs, "content_type_preference"):
