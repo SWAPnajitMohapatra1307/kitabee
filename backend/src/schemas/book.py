@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +197,50 @@ class ContentItemResponse(BaseModel):
         ...,
         description="Source string matching external_source.",
     )
-    
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _normalize_language(cls, v):
+        if v is None:
+            return "en"
+        if isinstance(v, list):
+            return v[0] if v and isinstance(v[0], str) else "en"
+        if isinstance(v, str):
+            return v or "en"
+        return "en"
+
+    @field_validator("author", mode="before")
+    @classmethod
+    def _normalize_author(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return ", ".join(str(x) for x in v) if v else None
+        return str(v)
+
+    @field_validator("authors", mode="before")
+    @classmethod
+    def _normalize_authors(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return [str(x) for x in v if x]
+        return []
+
+    @field_validator("genres", mode="before")
+    @classmethod
+    def _normalize_genres(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return [str(x) for x in v if x]
+        return []
+
+
 class ContentItemListResponse(BaseModel):
     """Paginated list of ContentItemResponse objects."""
 

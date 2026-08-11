@@ -277,7 +277,7 @@ class ContentRouter:
             return None
 
         try:
-            await upsert_book_from_internet_archive(self._db, raw)
+            await upsert_book_from_internet_archive(self._db, normalized)
         except Exception:
             logger.warning(
                 "Failed to persist Internet Archive item",
@@ -398,6 +398,16 @@ class ContentRouter:
 
         return results
 
+def _extract_free_url(book: Any, prefix: str) -> Optional[str]:
+    """Return the free read URL for a persisted book if available."""
+    if prefix != PREFIX_IA:
+        return None
+    meta = getattr(book, "metadata_json", None) or {}
+    if isinstance(meta, dict):
+        url = meta.get("read_url") or meta.get("free_url")
+        if url:
+            return url
+    return f"https://archive.org/details/{book.external_id}"
 
 def _db_book_to_content_item(book: Any, prefix: str) -> dict[str, Any]:
     """Convert a DB Book ORM object into a normalized ContentItem dict.
@@ -428,7 +438,7 @@ def _db_book_to_content_item(book: Any, prefix: str) -> dict[str, Any]:
         "cover_url_large": book.cover_url_large,
         "content_type": "comic" if prefix == PREFIX_CV else "book",
         "is_free": is_free,
-        "free_url": None,
+        "free_url": _extract_free_url(book, prefix),
         "genres": book.genres or [],
         "language": book.language or "en",
         "publisher": book.publisher,

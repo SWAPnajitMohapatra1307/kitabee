@@ -35,6 +35,13 @@ export type SimilarBooksResponse = {
   results: Book[];
 };
 
+export type SearchResponse = {
+  total_count: number;
+  limit: number;
+  offset: number;
+  results: Book[];
+};
+
 export async function fetchBookById(contentId: string): Promise<Book> {
   const response = await api.get(`/books/${encodeURIComponent(contentId)}`);
   return response.data.data as Book;
@@ -49,5 +56,16 @@ export async function fetchSimilarBooks(
     { params: { limit } }
   );
   const payload = response.data.data as SimilarBooksResponse;
+  return payload?.results ?? [];
+}
+
+export async function searchBooks(
+  query: string,
+  limit: number = 20
+): Promise<Book[]> {
+  const response = await api.get("/books/search", {
+    params: { q: query, limit },
+  });
+  const payload = response.data.data as SearchResponse;
   return payload?.results ?? [];
 }
