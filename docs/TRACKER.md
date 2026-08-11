@@ -1,10 +1,9 @@
-```
 # 📊 Kitabee — Project Tracker
 
-> **Document Version:** 2.2
-> **Last Updated:** 2026-08-09
+> **Document Version:** 2.4
+> **Last Updated:** 2026-08-10
 > **Owner:** [Your Name]
-> **Timeline:** Week 3 Complete (Day 21 done)
+> **Timeline:** Week 4 — Day 25 Complete
 > **Related Docs:** [IMPLEMENTATIONPLAN.md](./IMPLEMENTATIONPLAN.md) | [PRD.md](./PRD.md) | [RULES.md](./RULES.md)
 
 
@@ -83,16 +82,16 @@ Week 3 restructured completely. Week 4 updated to reflect new screens. Weeks 1-2
 Week 1: ██████████ 100% (7/7 days) ✅
 Week 2: ██████████ 100% (7/7 days) ✅
 Week 3: ██████████ 100% (7/7 days) ✅
-Week 4: ███░░░░░░░  29% (2/7 days)
+Week 4: ████░░░░░░  57% (4/7 days)
 Week 5: ░░░░░░░░░░   0% (0/7 days)
-Total:  ████████░░  63% (23/35 days)
+Total:  ████████░░  74% (26/35 days)
 ```
 
 ### Task Completion Stats
 
 | **Total Tasks** | 200+ |
 |---|---|
-| **Completed** | 130+ |
+| **Completed** | 160+ |
 | **Total tests passing** | 792 |
 | **In Progress** | 0 |
 | **Blocked** | 0 |
@@ -102,9 +101,9 @@ Total:  ████████░░  63% (23/35 days)
 
 ### Current Sprint
 
-**Day:** Day 21 complete ✅
-**Focus:** Week 3 complete — Day 22 next — Expo Project + Navigation
-**Next Milestone:** Day 24 — Netflix-Style Home Screen on phone
+**Day:** Day 25 complete ✅
+**Focus:** Week 4 — Mobile App Development
+**Next Milestone:** Day 27 — Library + Free Reading
 
 ### Velocity
 
@@ -113,7 +112,7 @@ Total:  ████████░░  63% (23/35 days)
 | Week 1 | ~50 | 50 | ✅ Complete (182 tests) |
 | Week 2 | ~35 | 32 | ✅ Complete (351 tests, 78% cov) |
 | Week 3 | ~42 | 42 | ✅ Complete (792 tests, 86% cov) |
-| Week 4 | ~45 | 0 | Not started |
+| Week 4 | ~45 | ~32 | 🟡 In Progress |
 | Week 5 | ~25 | 0 | Not started |
 
 ---
@@ -144,10 +143,10 @@ Total:  ████████░░  63% (23/35 days)
 [✅] Day 21 - ML Testing + Evaluation + Week 3 Review            🆕 v2.0
 [✅] Day 22 - Expo Project + Navigation
 [✅] Day 23 - Auth Screens + Backend Wiring
-[ ] Day 24 - Netflix-Style Home Screen (Collection Rows)         🆕 v2.0
-[ ] Day 25 - Search Screen (Books + Comics Unified)              🆕 v2.0
-[ ] Day 26 - Book/Comic Detail + Series Order UI                 🆕 v2.0
-[ ] Day 27 - Library + Free Reading (EPUB + Comics Reader)       🆕 v2.0
+[✅] Day 24 - Netflix-Style Home Screen (Collection Rows)        🆕 v2.0
+[✅] Day 25 - Book Detail + Library + Optimistic Updates         🆕 v2.0
+[ ] Day 26 - Search Screen (Books + Comics Unified)              🆕 v2.0
+[ ] Day 27 - Series Order UI + Rating Modal                      🆕 v2.0
 [ ] Day 28 - Profile + Insights + Cross-Platform Testing
 [ ] Day 29 - Dockerize Backend
 [ ] Day 30 - AWS EC2 Setup
@@ -503,7 +502,7 @@ Validate all ML models with standard IR metrics. Integration test full pipeline.
 
 ### Week 4 Progress
 ```
-███░░░░░░░  29% (16/45 tasks estimated)
+████░░░░░░  57% (4/7 days)
 ```
 
 ### Week 4 Overview
@@ -605,76 +604,139 @@ Week 4 updated in v2.0 to build:
 
 ## 📅 DAY 24: Netflix-Style Home Screen (v2.0)
 
+### 🎯 Day Goal
+Build the Netflix-style home screen with horizontal collection rows, cover cards, and backend wiring.
+
 ### Tasks
 
-- [ ] **T24.1** Create ContentCard component (works for books + comics)
-  - Status: 🔴 BLOCKED
+- [x] **T24.1** Create ContentCard component (works for books + comics)
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: Cover image with fallback initials block. Badge for free items. Amber accent. Tap navigates to BookDetail.
 
-- [ ] **T24.2** Create CollectionRow component (horizontal scrollable list)
-  - Status: 🔴 BLOCKED
+- [x] **T24.2** Create CollectionRow component (horizontal scrollable list)
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: FlatList horizontal. Title + See All header. Snap to card. Skeleton loading state.
 
-- [ ] **T24.3** Build HomeScreen (fetches GET /api/v1/collections)
-  - Status: 🔴 BLOCKED
+- [x] **T24.3** Build HomeScreen (fetches GET /api/v1/collections)
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: ScrollView of CollectionRows. Pull-to-refresh. Auth token injected. Greeting header with user name.
 
-- [ ] **T24.4** Build FullCollectionScreen (tap See all)
-  - Status: 🔴 BLOCKED
+- [x] **T24.4** Build FullCollectionScreen (tap See all)
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: Grid layout. Back nav. Title from route params.
 
-- [ ] **T24.5** Test on phone + commit
-  - Status: 🔴 BLOCKED
+- [x] **T24.5** Test on phone + commit
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Commit: feat(frontend): Day 24 — Netflix home screen + collection rows
+  - Notes: Collections load on phone ✅. Tap card → detail ✅. See All → grid ✅. Pull to refresh ✅.
+
+**Success Criteria:**
+- ✅ Home screen shows themed collection rows from backend
+- ✅ Tap card navigates to BookDetail
+- ✅ See All shows full grid
+- ✅ Pull-to-refresh works
+- ✅ Verified on physical Android device
 
 ---
 
-## 📅 DAY 25: Search Screen (Books + Comics Unified)
+## 📅 DAY 25: Book Detail + Library + Optimistic Updates
+
+### 🎯 Day Goal
+Build full BookDetailScreen, wire library add/remove with optimistic updates via Zustand libraryStore, status picker chips, fix library title bug.
 
 ### Tasks
 
-- [ ] **T25.1** Build SearchScreen with debounced input
-  - Status: 🔴 BLOCKED
+- [x] **T25.1** Create `frontend/src/stores/libraryStore.ts`
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: Zustand + AsyncStorage persist under key `kitabee-library`. items map, load, syncFromServer, addOptimistic, removeOptimistic, setStatusOptimistic, addToLibrary, removeFromLibrary, setStatus, getItem.
 
-- [ ] **T25.2** Build SearchResultCard component
-  - Status: 🔴 BLOCKED
+- [x] **T25.2** Build BookDetailScreen
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: Cover hero, title, author, description, rating row. Add/Remove library button. Status picker chips appear when in library.
 
-- [ ] **T25.3** Wire search to backend
-  - Status: 🔴 BLOCKED
+- [x] **T25.3** Wire LibraryScreen to libraryStore
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: Reads from store — no loader flash between screens. Client-side filter chips. Background syncFromServer on focus. Pull-to-refresh still works.
 
-- [ ] **T25.4** Test on phone + commit
-  - Status: 🔴 BLOCKED
+- [x] **T25.4** Fix BUG-D25-02 — Library items showed "Untitled"
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Notes: Root cause — `backend/src/schemas/library.py` inject_content_id validator built book_title but never included it in returned dict. Fix: added `"title": book_title` to return dict.
+
+- [x] **T25.5** Test on phone + commit
+  - Status: ✅ DONE
+  - Completed: 2026-08-10
+  - Commit: T25.8 — libraryStore with optimistic updates + status picker + library title fix
+  - Notes: Add/remove instant ✅. Status change instant ✅. Persist across reload ✅. Filter chips correct ✅. Title + author both show ✅.
+
+**Success Criteria:**
+- ✅ Add/remove from library is instant (optimistic)
+- ✅ Status picker chips appear and update instantly
+- ✅ Library persists across app reload
+- ✅ Library screen filter chips work correctly
+- ✅ Title shows correctly (not "Untitled")
+- ✅ Verified on physical Android device
 
 ---
 
-## 📅 DAY 26: Book/Comic Detail + Series Order UI
+## 📅 DAY 26: Search Screen (Books + Comics Unified)
+
+### 🎯 Day Goal
+Build unified search screen with debounced input, result cards, and backend wiring.
 
 ### Tasks
 
-- [ ] **T26.1** Build DetailScreen (works for books and comics)
-  - Status: 🔴 BLOCKED
+- [ ] **T26.1** Build SearchScreen with debounced input
+  - Status: 🟢 READY
+  - Notes: Text input → hits /api/v1/books/search?q=. Debounce 350ms. Empty state + loading state.
 
-- [ ] **T26.2** Build SeriesOrderSection component
-  - Status: 🔴 BLOCKED
+- [ ] **T26.2** Build SearchResultCard component
+  - Status: 🟢 READY
+  - Notes: Compact row — cover thumbnail, title, author, source badge (gb/cv/ia). Tap → BookDetail.
 
-- [ ] **T26.3** Build RatingModal
-  - Status: 🔴 BLOCKED
+- [ ] **T26.3** Wire search to backend
+  - Status: 🟢 READY
+  - Notes: Check if endpoint exists first. May need to add comics to search results.
 
 - [ ] **T26.4** Test on phone + commit
-  - Status: 🔴 BLOCKED
+  - Status: 🟢 READY
 
 ---
 
-## 📅 DAY 27: Library + Free Reading (EPUB + Comics Reader)
+## 📅 DAY 27: Series Order UI + Rating Modal
+
+### 🎯 Day Goal
+Add series order section to BookDetail. Build star rating modal. Wire rating to backend.
 
 ### Tasks
 
-- [ ] **T27.1** Build LibraryScreen
+- [ ] **T27.1** Build SeriesOrderSection component
   - Status: 🔴 BLOCKED
+  - Depends On: T26.4
 
-- [ ] **T27.2** Build EPUBReaderScreen (WebView-based)
+- [ ] **T27.2** Wire series to GET /api/v1/books/{book_id}/series
   - Status: 🔴 BLOCKED
+  - Depends On: T27.1
 
-- [ ] **T27.3** Build ComicsReaderScreen (image-based, swipe pages)
+- [ ] **T27.3** Build RatingModal (star picker)
   - Status: 🔴 BLOCKED
+  - Depends On: T26.4
 
-- [ ] **T27.4** Test reading on phone + commit
+- [ ] **T27.4** Wire rating to backend POST /api/v1/ratings
   - Status: 🔴 BLOCKED
+  - Depends On: T27.3
+
+- [ ] **T27.5** Test on phone + commit
+  - Status: 🔴 BLOCKED
+  - Depends On: T27.4
 
 ---
 
@@ -684,6 +746,7 @@ Week 4 updated in v2.0 to build:
 
 - [ ] **T28.1** Build ProfileScreen
   - Status: 🔴 BLOCKED
+  - Notes: Library counts per status. Top-rated books. Logout button.
 
 - [ ] **T28.2** Build InsightsScreen
   - Status: 🔴 BLOCKED
@@ -779,11 +842,13 @@ Week 4 updated in v2.0 to build:
 - [x] 🔢 **M8: Series Order Guide Working** (Day 18) — 625 tests 🆕 v2.0
 - [x] 📖 **M9: Free Reading Client Integrated** (Day 16) — Internet Archive live 🆕 v2.0
 - [x] 🤖 **M10: ML Stack Complete** (Day 21) — 9 ML modules, 792 tests, 86% coverage 🆕 v2.0
-- [ ] 📱 **M11: Mobile App Functional** (Day 27)
-- [ ] ✅ **M12: Cross-Platform Tested** (Day 28)
-- [ ] 🚀 **M13: Backend Deployed** (Day 31)
-- [ ] 🌐 **M14: Full Stack Live** (Day 32)
-- [ ] 🎉 **M15: LAUNCHED!** (Day 35)
+- [x] 📱 **M11: Netflix Home Screen on Phone** (Day 24) — Collection rows live ✅
+- [x] 📚 **M12: Library with Optimistic Updates** (Day 25) — Add/remove/status instant ✅
+- [ ] 🔍 **M13: Search Live** (Day 26)
+- [ ] ✅ **M14: Cross-Platform Tested** (Day 28)
+- [ ] 🚀 **M15: Backend Deployed** (Day 31)
+- [ ] 🌐 **M16: Full Stack Live** (Day 32)
+- [ ] 🎉 **M17: LAUNCHED!** (Day 35)
 
 ---
 
@@ -797,7 +862,7 @@ Week 4 updated in v2.0 to build:
 | Frontend test coverage | 50%+ | 0% | 🔴 Week 4 |
 | API endpoints implemented | 20+ | 23 | ✅ On track |
 | ML modules built | 9 | 9 | ✅ Complete |
-| Mobile screens built | 20+ | 0 | 🔴 Week 4 |
+| Mobile screens built | 20+ | 8 | 🟡 In progress |
 | Documentation files | 8+ | 8 | ✅ Complete |
 | **Total tests passing** | 400+ | 792 | ✅ Exceeded |
 
@@ -816,13 +881,30 @@ Week 4 updated in v2.0 to build:
 | evaluation.py | 96% |
 | hybrid.py | 98% |
 
+### Mobile Screens Built
+
+| Screen | Status |
+|--------|--------|
+| WelcomeScreen | ✅ Done |
+| LoginScreen | ✅ Done |
+| RegisterScreen | ✅ Done |
+| HomeScreen | ✅ Done |
+| FullCollectionScreen | ✅ Done |
+| BookDetailScreen | ✅ Done |
+| LibraryScreen | ✅ Done |
+| SearchScreen | 🟢 Next |
+| SeriesOrderSection | 🔴 Blocked |
+| RatingModal | 🔴 Blocked |
+| ProfileScreen | 🔴 Blocked |
+| InsightsScreen | 🔴 Blocked |
+
 ### Time Metrics
 
 | Metric | Value |
 |--------|-------|
-| **Days elapsed** | 21 |
-| **Days remaining** | 14 |
-| **Total hours logged** | ~120 |
+| **Days elapsed** | 25 |
+| **Days remaining** | 10 |
+| **Total hours logged** | ~145 |
 | **Average hours/day needed** | ~5 |
 
 ---
@@ -831,6 +913,11 @@ Week 4 updated in v2.0 to build:
 
 ### Active Blockers
 *None currently.*
+
+### Deferred Items
+- **BUG-D26-01** — Home feed not stable across refreshes. Fix with Redis cache of `/api/v1/collections` per user, TTL 30 min.
+- **T-WEB-01** — Expo web preview. Swap `expo-secure-store` for `localStorage` on web. Not urgent.
+- **T-LIB-02** — Full library edit sheet (status + notes + favorite + progress). Current chip picker is enough for now.
 
 ### Historical Issues
 - Day 16: Comic Vine 403 — fixed by adding Chrome User-Agent header
@@ -841,6 +928,7 @@ Week 4 updated in v2.0 to build:
 - Day 21: Keras GPU warning on Windows is normal — TF_CPP_MIN_LOG_LEVEL=3 silences in tests
 - Day 21: Float epsilon dust in cosine similarity — use `math.isclose()` with abs_tol=1e-12
 - Day 21: Always inspect real API signatures before writing tests — do not assume
+- Day 25: Library items showed "Untitled" — backend schemas/library.py inject_content_id built book_title but never included it in returned dict — fixed by adding `"title": book_title`
 
 ---
 
@@ -882,28 +970,47 @@ Week 4 updated in v2.0 to build:
 - 📊 792 tests passing
 - 💡 RecommendationEvaluator: precision@k, recall@k, NDCG@k, catalog coverage, diversity. Integration tests: full pipeline ratings→collections. Coverage 86%. All ML modules ≥96%.
 
+### Day 22 — 2026-08-09
+- ✅ 7 tasks complete
+- 📱 Expo scaffold live on physical Android phone
+- 💡 Node 20.19.5 LTS required. React Navigation 7. Zustand. Theme tokens + ThemeContext.
+
+### Day 23 — 2026-08-09
+- ✅ 9 tasks complete
+- 📱 Full auth flow verified on physical Android
+- 💡 Register → Main ✅. Login → Main ✅. Persist across kill ✅. Logout ✅.
+
+### Day 24 — 2026-08-10
+- ✅ 5 tasks complete
+- 📱 Netflix home screen verified on physical Android
+- 💡 ContentCard + CollectionRow + HomeScreen + FullCollectionScreen. Collections load from backend. Pull-to-refresh. Tap → BookDetail.
+
+### Day 25 — 2026-08-10
+- ✅ 5 tasks complete
+- 📱 Library with optimistic updates verified on physical Android
+- 💡 libraryStore Zustand+AsyncStorage. BookDetailScreen full. LibraryScreen wired to store. Status picker chips. BUG-D25-02 title fix in backend schemas.
+
 ---
 
 ## 🎯 CURRENT FOCUS
 
 ### Right Now
-Week 3 complete. Ready for Week 4 — Mobile App.
+Day 25 complete. Ready for Day 26 — Search Screen.
 
 ### Up Next Queue
-1. T22.1 — Verify Expo setup
-2. T22.2 — Install deps
-3. T22.3 — Create folder structure
-4. T22.4 — Setup theme system
-5. T22.5 — Setup navigation
+1. T26.1 — Build SearchScreen with debounced input
+2. T26.2 — Build SearchResultCard component
+3. T26.3 — Wire search to backend
+4. T26.4 — Test on phone + commit
 
-### This Week Goals (Week 4)
-- [ ] Day 22 — Expo Project + Navigation
-- [ ] Day 23 — Auth Screens + Onboarding
-- [ ] Day 24 — Netflix-Style Home Screen
-- [ ] Day 25 — Search Screen
-- [ ] Day 26 — Book/Comic Detail + Series Order UI
-- [ ] Day 27 — Library + Free Reading
-- [ ] Day 28 — Profile + Cross-Platform Testing
+### This Week Goals (Week 4 remaining)
+- [x] Day 22 — Expo Project + Navigation ✅
+- [x] Day 23 — Auth Screens + Backend Wiring ✅
+- [x] Day 24 — Netflix-Style Home Screen ✅
+- [x] Day 25 — Book Detail + Library + Optimistic Updates ✅
+- [ ] Day 26 — Search Screen (Books + Comics Unified)
+- [ ] Day 27 — Series Order UI + Rating Modal
+- [ ] Day 28 — Profile + Insights + Cross-Platform Testing
 
 ---
 
@@ -937,7 +1044,9 @@ Week 3 complete. Ready for Week 4 — Mobile App.
 - 🎉 **CollaborativeFilter + Personalizer live** (Day 19) — 677 tests
 - 🎉 **Neural Recommender + Collections API live** (Day 20) — 754 tests
 - 🎉 **Week 3 Complete!** (Day 21) — 792 tests, 86% coverage, 9 ML modules ✅
-- [ ] 🎉 **Netflix home screen on phone** (Day 24)
+- 🎉 **Netflix home screen on phone** (Day 24) — Collection rows live ✅
+- 🎉 **Library with optimistic updates** (Day 25) — Instant add/remove/status ✅
+- [ ] 🎉 **Search live** (Day 26)
 - [ ] 🎉 **First free book read in-app** (Day 27)
 - [ ] 🎉 **Deployed live!** (Day 31)
 - [ ] 🎉 **LAUNCHED!** (Day 35)
@@ -953,14 +1062,11 @@ Week 3 complete. Ready for Week 4 — Mobile App.
 | 2.1 | 2026-08-08 | Days 15-19 complete. Week 3 in progress. |
 | 2.2 | 2026-08-09 | Days 20-21 complete. Week 3 done. 792 tests, 86% coverage. M10 added. Week 4 unblocked. |
 | 2.3 | 2026-08-09 | Days 22-23 complete. Expo scaffold + auth flow live on physical Android phone. |
+| 2.4 | 2026-08-10 | Days 24-25 complete. Netflix home + BookDetail + Library + optimistic updates. BUG-D25-02 fixed. M11+M12 added. |
 
----
 
 **End of Tracker** 📊
 
 *"What gets measured gets managed. What gets tracked gets done."*
 
-**Days 1-21 done. 792 tests passing. 86% coverage. Week 4 (Mobile App) is next.** 🏁
-```
-
----
+**Days 1-25 done. 792 tests passing. 86% coverage. Day 26 — Search Screen is next.** 🏁
