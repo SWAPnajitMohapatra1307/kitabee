@@ -7,22 +7,7 @@ import {
 } from "react-native"
 import { useTheme } from "../theme/ThemeContext"
 import ContentCard from "./ContentCard"
-
-type ContentItem = {
-  content_id: string
-  title: string
-  author: string
-  cover_url: string | null
-  content_type: string
-  is_free: boolean
-  free_url: string | null
-}
-
-type Collection = {
-  id: string
-  title: string
-  items: ContentItem[]
-}
+import type { Collection, ContentItem } from "../services/collections"
 
 type CollectionRowProps = {
   collection: Collection

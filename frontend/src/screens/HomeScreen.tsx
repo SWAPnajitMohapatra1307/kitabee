@@ -56,8 +56,8 @@ const HomeScreen: React.FC = () => {
   }
 
   const handleItemPress = (item: ContentItem) => {
-    console.log("Tap item:", item.title)
-  }
+  navigation.navigate("BookDetail", { content_id: item.content_id })
+}
 
   const handleSeeAllPress = (collection: Collection) => {
     navigation.navigate("FullCollection", {

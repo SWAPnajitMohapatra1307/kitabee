@@ -132,6 +132,7 @@ class LibraryItemResponse(BaseModel):
             "updated_at": data.updated_at,
             "cover_url": book_cover,
             "authors": book_authors,
+            "title": book_title,
         }
 
 

@@ -202,7 +202,7 @@ class InternetArchiveClient:
             "language": raw.get("language"),
             "mediatype": raw.get("mediatype"),
             "is_public_domain": self._is_public_domain(raw),
-            "read_url": None,
+            "read_url": f"https://archive.org/details/{identifier}" if identifier else None,
             "thumbnail_url": f"https://archive.org/services/img/{identifier}" if identifier else None,
             "source": "internet_archive",
         }
@@ -224,7 +224,7 @@ class InternetArchiveClient:
             "language": metadata.get("language"),
             "mediatype": metadata.get("mediatype"),
             "is_public_domain": self._is_public_domain(metadata),
-            "read_url": None,
+            "read_url": f"https://archive.org/details/{identifier}",
             "thumbnail_url": f"https://archive.org/services/img/{identifier}",
             "source": "internet_archive",
         }

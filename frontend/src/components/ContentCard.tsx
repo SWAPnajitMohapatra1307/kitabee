@@ -7,16 +7,7 @@ import {
   TouchableOpacity,
 } from "react-native"
 import { useTheme } from "../theme/ThemeContext"
-
-type ContentItem = {
-  content_id: string
-  title: string
-  author: string
-  cover_url: string | null
-  content_type: string
-  is_free: boolean
-  free_url: string | null
-}
+import type { ContentItem } from "../services/collections"
 
 type ContentCardProps = {
   item: ContentItem

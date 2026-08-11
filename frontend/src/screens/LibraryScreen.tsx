@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   View,
   Text,
@@ -12,11 +12,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { useTheme } from "../theme/ThemeContext"
-import {
-  getMyLibrary,
-  LibraryItem,
-  LibraryStatus,
-} from "../services/library"
+import { LibraryItem, LibraryStatus } from "../services/library"
+import { useLibraryStore } from "../stores/libraryStore"
 
 type FilterKey = "all" | LibraryStatus
 
@@ -32,41 +29,48 @@ const LibraryScreen: React.FC = () => {
   const { theme, typography, spacing, rounded } = useTheme()
   const navigation = useNavigation<any>()
 
-  const [items, setItems] = useState<LibraryItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const items = useLibraryStore((s) => s.items)
+  const loaded = useLibraryStore((s) => s.loaded)
+  const loading = useLibraryStore((s) => s.loading)
+  const load = useLibraryStore((s) => s.load)
+  const syncFromServer = useLibraryStore((s) => s.syncFromServer)
+
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterKey>("all")
 
-  const load = useCallback(async () => {
-    try {
-      setError(null)
-      const statusParam = filter === "all" ? undefined : filter
-      const response = await getMyLibrary(statusParam, 100, 0)
-      setItems(response.results)
-    } catch (err: any) {
-      setError(err?.message || "Failed to load library")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [filter])
-
   useEffect(() => {
-    setLoading(true)
-    load()
-  }, [load])
+    if (!loaded) {
+      load().catch((e) =>
+        setError(e?.message || "Failed to load library")
+      )
+    }
+  }, [loaded, load])
 
   useFocusEffect(
     useCallback(() => {
-      load()
-    }, [load])
+      syncFromServer().catch((e) =>
+        setError(e?.message || "Failed to refresh library")
+      )
+    }, [syncFromServer])
   )
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true)
-    load()
+    try {
+      setError(null)
+      await syncFromServer()
+    } catch (e: any) {
+      setError(e?.message || "Failed to refresh library")
+    } finally {
+      setRefreshing(false)
+    }
   }
+
+  const filteredItems = useMemo(() => {
+    if (filter === "all") return items
+    return items.filter((i) => i.status === filter)
+  }, [items, filter])
 
   const renderItem = ({ item }: { item: LibraryItem }) => (
     <TouchableOpacity
@@ -106,7 +110,13 @@ const LibraryScreen: React.FC = () => {
         />
       )}
 
-      <View style={{ flex: 1, marginLeft: spacing.xs, justifyContent: "center" }}>
+      <View
+        style={{
+          flex: 1,
+          marginLeft: spacing.xs,
+          justifyContent: "center",
+        }}
+      >
         <Text
           numberOfLines={2}
           style={[typography["title-sm"], { color: theme.text.primary }]}
@@ -135,6 +145,8 @@ const LibraryScreen: React.FC = () => {
       </View>
     </TouchableOpacity>
   )
+
+  const showFullLoader = loading && !loaded
 
   return (
     <SafeAreaView
@@ -184,7 +196,9 @@ const LibraryScreen: React.FC = () => {
                 style={[
                   typography["caption-uppercase"],
                   {
-                    color: active ? theme.text.onPrimary : theme.text.secondary,
+                    color: active
+                      ? theme.text.onPrimary
+                      : theme.text.secondary,
                   },
                 ]}
               >
@@ -195,19 +209,21 @@ const LibraryScreen: React.FC = () => {
         })}
       </View>
 
-      {loading ? (
+      {showFullLoader ? (
         <View style={styles.center}>
           <ActivityIndicator color={theme.brand.primary} />
         </View>
-      ) : error ? (
+      ) : error && items.length === 0 ? (
         <View style={styles.center}>
-          <Text style={[typography["body-md"], { color: theme.text.secondary }]}>
+          <Text
+            style={[typography["body-md"], { color: theme.text.secondary }]}
+          >
             {error}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={items}
+          data={filteredItems}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={{ padding: spacing.xs }}
@@ -217,7 +233,10 @@ const LibraryScreen: React.FC = () => {
           ListEmptyComponent={
             <View style={styles.center}>
               <Text
-                style={[typography["body-md"], { color: theme.text.secondary }]}
+                style={[
+                  typography["body-md"],
+                  { color: theme.text.secondary },
+                ]}
               >
                 Nothing in this shelf yet.
               </Text>
