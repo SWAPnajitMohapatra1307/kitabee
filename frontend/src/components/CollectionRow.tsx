@@ -73,7 +73,7 @@ const CollectionRow: React.FC<CollectionRowProps> = ({
       >
         {collection.items.map((item) => (
           <ContentCard
-            key={item.content_id}
+            key={`${collection.id}-${item.content_id}`}
             item={item}
             onPress={onItemPress}
           />
