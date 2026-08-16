@@ -21,14 +21,13 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// NOTE: intentionally do NOT clear token on 401.
+// Auto-clearing causes cascade failures: one stale request nukes
+// the token and every subsequent call fails with 403.
+// Token lifecycle is managed explicitly by auth flows (login/logout).
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      AsyncStorage.removeItem(TOKEN_KEY);
-    }
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export async function setAuthToken(token: string): Promise<void> {

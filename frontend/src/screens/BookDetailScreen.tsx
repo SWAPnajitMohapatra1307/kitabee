@@ -13,10 +13,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useTheme } from "../theme/ThemeContext"
 import { fetchBookById, fetchSimilarBooks, Book } from "../services/books"
-import { rateBook, getMyRating } from "../services/ratings"
+import { getMyRating, Rating } from "../services/ratings"
 import { LibraryStatus } from "../services/library"
 import { useLibraryStore } from "../stores/libraryStore"
 import CollectionRow from "../components/CollectionRow"
+import RatingModal from "../components/RatingModal"
 import type { ContentSource } from "../services/collections"
 
 const STATUS_OPTIONS: { key: LibraryStatus; label: string }[] = [
@@ -35,7 +36,8 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
   const [book, setBook] = useState<Book | null>(null)
   const [loading, setLoading] = useState(true)
   const [similarBooks, setSimilarBooks] = useState<Book[]>([])
-  const [userRating, setUserRating] = useState<number | null>(null)
+  const [existingRating, setExistingRating] = useState<Rating | null>(null)
+  const [ratingModalVisible, setRatingModalVisible] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const libraryItem = libraryStore.getItem(content_id)
@@ -58,7 +60,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
 
       setBook(bookData)
       setSimilarBooks(similarData)
-      setUserRating(ratingData?.rating ?? null)
+      setExistingRating(ratingData)
 
       if (!libraryStore.loaded) {
         await libraryStore.load()
@@ -95,24 +97,33 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
     }
   }
 
-  const handleRate = async (rating: number) => {
-    try {
-      await rateBook(content_id, { rating })
-      setUserRating(rating)
-    } catch (err: any) {
-      console.error("Rate error:", err?.response?.data || err?.message)
-      const msg =
-        err?.response?.data?.error?.message ||
-        err?.message ||
-        "Could not save rating"
-      Alert.alert("Error", msg)
-    }
-  }
-
   const handleRead = () => {
     if (book?.free_url) {
       Linking.openURL(book.free_url)
     }
+  }
+
+  const handleRatingSaved = (newStars: number) => {
+    setExistingRating((prev) =>
+      prev
+        ? { ...prev, rating: newStars }
+        : ({
+            id: "",
+            user_id: "",
+            book_id: "",
+            rating: newStars,
+            review_title: null,
+            review_text: null,
+            is_spoiler: false,
+            helpful_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as Rating)
+    )
+  }
+
+  const handleRatingDeleted = () => {
+    setExistingRating(null)
   }
 
   if (loading) {
@@ -159,10 +170,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           style={{ padding: spacing.xs }}
         >
           <Text
-            style={[
-              typography["title-md"],
-              { color: theme.text.primary },
-            ]}
+            style={[typography["title-md"], { color: theme.text.primary }]}
           >
             ← Back
           </Text>
@@ -320,6 +328,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           </View>
         )}
 
+        {/* Rating section */}
         <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
           <Text
             style={[
@@ -329,23 +338,63 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           >
             Your Rating
           </Text>
-          <View style={{ flexDirection: "row", gap: spacing.xs }}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity key={star} onPress={() => handleRate(star)}>
+
+          {existingRating ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
+              }}
+            >
+              <View style={{ flexDirection: "row", gap: 4 }}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Text
+                    key={s}
+                    style={{
+                      fontSize: 24,
+                      color:
+                        s <= existingRating.rating
+                          ? theme.brand.primary
+                          : theme.text.muted,
+                    }}
+                  >
+                    ★
+                  </Text>
+                ))}
+              </View>
+              <TouchableOpacity onPress={() => setRatingModalVisible(true)}>
                 <Text
-                  style={{
-                    fontSize: 28,
-                    color:
-                      userRating && star <= userRating
-                        ? theme.brand.primary
-                        : theme.text.muted,
-                  }}
+                  style={[
+                    typography["body-sm"],
+                    { color: theme.text.link },
+                  ]}
                 >
-                  ★
+                  Edit
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setRatingModalVisible(true)}
+              style={[
+                styles.button,
+                {
+                  backgroundColor: theme.background.elevated,
+                  borderRadius: rounded.md,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  typography["title-sm"],
+                  { color: theme.text.secondary, textAlign: "center" },
+                ]}
+              >
+                Rate this Book
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {book.description && (
@@ -388,6 +437,15 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           </View>
         )}
       </ScrollView>
+
+      <RatingModal
+        visible={ratingModalVisible}
+        contentId={content_id}
+        existingRating={existingRating}
+        onClose={() => setRatingModalVisible(false)}
+        onSaved={handleRatingSaved}
+        onDeleted={handleRatingDeleted}
+      />
     </SafeAreaView>
   )
 }
