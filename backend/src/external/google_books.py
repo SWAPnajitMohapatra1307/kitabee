@@ -44,11 +44,7 @@ class _NotFoundError(Exception):
 
 
 class GoogleBooksClient:
-    """Async wrapper around the public Google Books API.
-
-    Handles authentication, retry with exponential backoff, and
-    response mapping into the internal book schema shape.
-    """
+    """Async wrapper around the public Google Books API."""
 
     def __init__(self) -> None:
         self._api_key: str = settings.google_books_api_key
@@ -62,18 +58,6 @@ class GoogleBooksClient:
         query: str,
         max_results: int = 10,
     ) -> list[dict[str, Any]]:
-        """Search volumes by free-text query.
-
-        Reads from Redis first. On miss, calls the Google Books API
-        and caches non-empty results with SEARCH_CACHE_TTL_SECONDS.
-
-        Args:
-            query: Free-text search string (title, author, ISBN).
-            max_results: Maximum items to return (1-40).
-
-        Returns:
-            List of mapped book dicts. Empty list when API has no items.
-        """
         cache_key = f"gb:search:{query.strip().lower()}:{max_results}"
 
         cached_result = await redis_client.get(cache_key)
@@ -105,19 +89,6 @@ class GoogleBooksClient:
         return mapped
 
     async def get_by_id(self, volume_id: str) -> Optional[dict[str, Any]]:
-        """Fetch a single volume by its Google Books ID.
-
-        Reads from Redis first. On miss, calls the Google Books API
-        and caches successful results with VOLUME_CACHE_TTL_SECONDS.
-        Never caches None (miss or transient failure).
-
-        Args:
-            volume_id: Google Books volume identifier.
-
-        Returns:
-            Mapped book dict, or None when the volume does not exist or
-            the API returns a persistent transient error for this volume.
-        """
         cache_key = f"gb:volume:{volume_id}"
 
         cached_result = await redis_client.get(cache_key)
@@ -152,7 +123,6 @@ class GoogleBooksClient:
         return mapped
 
     async def close(self) -> None:
-        """Close the underlying HTTP client."""
         await self._client.aclose()
 
     async def _get_json(
@@ -160,7 +130,6 @@ class GoogleBooksClient:
         path: str,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        """GET a JSON response with retry on transient failures."""
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -189,11 +158,6 @@ class GoogleBooksClient:
         raise RuntimeError("unreachable: AsyncRetrying exited without return or raise")
 
     def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
-        """Inspect a response, raise retryable errors, raise not-found.
-
-        Strips the query string from any URL used in exceptions or logs
-        to prevent leaking the API key.
-        """
         status = response.status_code
         safe_url = str(response.url).split("?")[0]
         if status == 404:
@@ -212,18 +176,6 @@ class GoogleBooksClient:
 
     @staticmethod
     def _clean_text(value: Any) -> Optional[str]:
-        """Normalize a free-text field from Google Books.
-
-        Strips HTML tags, unescapes entities, collapses whitespace,
-        and trims surrounding spaces. Returns None for missing or
-        empty-after-cleaning values.
-
-        Args:
-            value: Raw value from the API response.
-
-        Returns:
-            Cleaned string, or None when input is missing or empty.
-        """
         if not isinstance(value, str):
             return None
         stripped = value.strip()
@@ -236,18 +188,6 @@ class GoogleBooksClient:
 
     @staticmethod
     def _clean_date(value: Any) -> Optional[str]:
-        """Normalize a Google Books publishedDate to YYYY-MM-DD.
-
-        Accepts year-only, year-month, and full ISO date shapes.
-        Pads shorter shapes with 01 day/month. Returns None for
-        any other value, including non-strings.
-
-        Args:
-            value: Raw publishedDate from the API response.
-
-        Returns:
-            Date string in YYYY-MM-DD form, or None.
-        """
         if not isinstance(value, str):
             return None
         candidate = value.strip()
@@ -263,17 +203,6 @@ class GoogleBooksClient:
 
     @staticmethod
     def _clean_int(value: Any) -> Optional[int]:
-        """Coerce a value to a positive int.
-
-        Rejects booleans, zero, and negatives. Accepts int, float,
-        and numeric strings.
-
-        Args:
-            value: Raw value from the API response.
-
-        Returns:
-            Positive int, or None when value is missing or invalid.
-        """
         if isinstance(value, bool):
             return None
         if isinstance(value, int):
@@ -290,17 +219,6 @@ class GoogleBooksClient:
 
     @staticmethod
     def _clean_float(value: Any) -> Optional[float]:
-        """Coerce a value to a positive float.
-
-        Rejects booleans, zero, and negatives. Accepts int, float,
-        and numeric strings.
-
-        Args:
-            value: Raw value from the API response.
-
-        Returns:
-            Positive float, or None when value is missing or invalid.
-        """
         if isinstance(value, bool):
             return None
         if isinstance(value, (int, float)):
@@ -316,17 +234,6 @@ class GoogleBooksClient:
 
     @staticmethod
     def _clean_str_list(value: Any) -> list[str]:
-        """Normalize a list-of-strings field from Google Books.
-
-        Filters out non-list inputs and non-string or empty items,
-        strips survivors, and deduplicates while preserving order.
-
-        Args:
-            value: Raw value from the API response.
-
-        Returns:
-            Cleaned list of strings (possibly empty).
-        """
         if not isinstance(value, list):
             return []
         seen: set[str] = set()
@@ -343,16 +250,6 @@ class GoogleBooksClient:
 
     @staticmethod
     def _extract_isbns(identifiers: Any) -> tuple[Optional[str], Optional[str]]:
-        """Pull ISBN_10 and ISBN_13 from industryIdentifiers.
-
-        Skips malformed entries. First valid value per type wins.
-
-        Args:
-            identifiers: Raw industryIdentifiers from the API response.
-
-        Returns:
-            Tuple of (isbn_10, isbn_13); either may be None.
-        """
         isbn_10: Optional[str] = None
         isbn_13: Optional[str] = None
         if not isinstance(identifiers, list):
@@ -374,6 +271,33 @@ class GoogleBooksClient:
         return isbn_10, isbn_13
 
     @staticmethod
+    def _extract_series_info(volume_info: dict[str, Any]) -> Optional[dict[str, Any]]:
+        """Extract seriesInfo from volumeInfo if present and valid.
+
+        Google Books returns seriesInfo at the volumeInfo level for books
+        that are part of a series. Structure:
+            {
+                "bookDisplayNumber": "1",
+                "series": [{"seriesId": "...", "seriesName": "...", "imageUrl": "..."}]
+            }
+
+        Returns the raw seriesInfo dict if it contains at least one series
+        entry with a seriesName. Returns None otherwise.
+        """
+        series_info = volume_info.get("seriesInfo")
+        if not isinstance(series_info, dict):
+            return None
+        series_list = series_info.get("series")
+        if not isinstance(series_list, list) or not series_list:
+            return None
+        first = series_list[0]
+        if not isinstance(first, dict):
+            return None
+        if not first.get("seriesName"):
+            return None
+        return series_info
+
+    @staticmethod
     def _map_volume(raw: dict[str, Any]) -> dict[str, Any]:
         """Map a raw Google Books volume into the internal schema shape."""
         volume_info = raw.get("volumeInfo") or {}
@@ -381,8 +305,9 @@ class GoogleBooksClient:
         isbn_10, isbn_13 = GoogleBooksClient._extract_isbns(
             volume_info.get("industryIdentifiers")
         )
+        series_info = GoogleBooksClient._extract_series_info(volume_info)
 
-        return {
+        mapped: dict[str, Any] = {
             "google_books_id": GoogleBooksClient._clean_text(raw.get("id")),
             "title": GoogleBooksClient._clean_text(volume_info.get("title")),
             "subtitle": GoogleBooksClient._clean_text(volume_info.get("subtitle")),
@@ -412,3 +337,8 @@ class GoogleBooksClient:
             "preview_link": GoogleBooksClient._clean_text(volume_info.get("previewLink")),
             "info_link": GoogleBooksClient._clean_text(volume_info.get("infoLink")),
         }
+
+        if series_info is not None:
+            mapped["series_info"] = series_info
+
+        return mapped

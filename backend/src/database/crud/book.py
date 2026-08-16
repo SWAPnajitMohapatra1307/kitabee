@@ -1,11 +1,4 @@
-"""CRUD helpers for the ``books`` table.
-
-This module is the database repository layer for books.
-It handles:
-- lookup by internal UUID
-- lookup by external source + external ID
-- create/update from Google Books mapped payloads
-"""
+"""CRUD helpers for the ``books`` table."""
 
 from __future__ import annotations
 
@@ -23,9 +16,6 @@ from src.database.base import Book
 
 GOOGLE_BOOKS_SOURCE = "google_books"
 
-# Fields updated on every upsert. Excludes identity fields (external_id,
-# external_source) and Kitabee-owned fields (kitabee_rating,
-# kitabee_ratings_count) which are never overwritten by upstream data.
 _MUTABLE_FIELDS = (
     "title",
     "subtitle",
@@ -50,19 +40,20 @@ _MUTABLE_FIELDS = (
 
 
 def _extract_published_year(published_date: Any) -> Optional[int]:
-    """Extract a year from a normalized YYYY-MM-DD date string."""
     if not isinstance(published_date, str):
         return None
-
     year_part = published_date[:4]
     if len(year_part) != 4 or not year_part.isdigit():
         return None
-
     return int(year_part)
 
 
-def _build_metadata(data: dict[str, Any]) -> dict[str, Any]:
-    """Build the JSONB metadata payload for the books table."""
+def _build_google_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    """Build the JSONB metadata payload for Google Books rows.
+
+    Persists preview_link, info_link, and seriesInfo (when present)
+    under the google_books key.
+    """
     google_books_meta: dict[str, Any] = {}
 
     preview_link = data.get("preview_link")
@@ -73,21 +64,48 @@ def _build_metadata(data: dict[str, Any]) -> dict[str, Any]:
     if info_link is not None:
         google_books_meta["info_link"] = info_link
 
+    series_info = data.get("series_info")
+    if isinstance(series_info, dict):
+        google_books_meta["seriesInfo"] = series_info
+
     if not google_books_meta:
         return {}
 
     return {"google_books": google_books_meta}
 
 
+def _build_comic_vine_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    """Build the JSONB metadata payload for Comic Vine rows.
+
+    Persists volume (id + name) and issue_number under the comic_vine key.
+    These are required by SeriesDetector Rule 1.
+    """
+    comic_vine_meta: dict[str, Any] = {}
+
+    volume = data.get("volume")
+    if isinstance(volume, dict) and volume.get("id") and volume.get("name"):
+        comic_vine_meta["volume"] = {
+            "id": volume["id"],
+            "name": volume["name"],
+        }
+
+    issue_number = data.get("issue_number")
+    if issue_number is not None:
+        comic_vine_meta["issue_number"] = issue_number
+
+    if not comic_vine_meta:
+        return {}
+
+    return {"comic_vine": comic_vine_meta}
+
+
 def _to_decimal(value: Any) -> Optional[Decimal]:
-    """Convert numeric input to Decimal, preserving None."""
     if value is None:
         return None
     return Decimal(str(value))
 
 
 def _book_kwargs_from_google(data: dict[str, Any]) -> dict[str, Any]:
-    """Translate Google Books mapped data into Book ORM fields."""
     external_id = data.get("google_books_id")
     if not external_id:
         raise ValueError("google_books_id is required to persist a book")
@@ -118,18 +136,13 @@ def _book_kwargs_from_google(data: dict[str, Any]) -> dict[str, Any]:
         "ratings_count": data.get("ratings_count") or 0,
         "kitabee_rating": None,
         "kitabee_ratings_count": 0,
-        "metadata_json": _build_metadata(data),
+        "metadata_json": _build_google_metadata(data),
         "cached_at": now,
         "updated_at": now,
     }
 
 
 def _apply_book_updates(book: Book, values: dict[str, Any]) -> None:
-    """Apply mutable fields onto an existing Book ORM object.
-
-    Only fields listed in ``_MUTABLE_FIELDS`` are written. Identity
-    and Kitabee-owned fields are never touched.
-    """
     for field in _MUTABLE_FIELDS:
         setattr(book, field, values[field])
 
@@ -138,7 +151,6 @@ async def get_book_by_id(
     db: AsyncSession,
     book_id: UUID,
 ) -> Optional[Book]:
-    """Fetch a book by internal UUID."""
     return await db.get(Book, book_id)
 
 
@@ -147,7 +159,6 @@ async def get_book_by_external_id(
     external_id: str,
     external_source: str = GOOGLE_BOOKS_SOURCE,
 ) -> Optional[Book]:
-    """Fetch a book by external source and external ID."""
     stmt = select(Book).where(
         Book.external_source == external_source,
         Book.external_id == external_id,
@@ -160,14 +171,6 @@ async def upsert_book_from_google(
     db: AsyncSession,
     data: dict[str, Any],
 ) -> Book:
-    """Create or update a book row from Google Books mapped data.
-
-    First tries lookup by (external_source, external_id).
-    If found, updates mutable metadata.
-    If not found, creates a new row.
-
-    Handles unique-race collisions by rolling back and re-fetching.
-    """
     values = _book_kwargs_from_google(data)
 
     existing = await get_book_by_external_id(
@@ -191,7 +194,6 @@ async def upsert_book_from_google(
         return book
     except IntegrityError:
         await db.rollback()
-
         existing = await get_book_by_external_id(
             db=db,
             external_id=values["external_id"],
@@ -199,18 +201,25 @@ async def upsert_book_from_google(
         )
         if existing is None:
             raise
-
         _apply_book_updates(existing, values)
         await db.commit()
         await db.refresh(existing)
         return existing
+
 
 COMIC_VINE_SOURCE = "comic_vine"
 INTERNET_ARCHIVE_SOURCE = "internet_archive"
 
 
 def _book_kwargs_from_comic_vine(data: dict[str, Any]) -> dict[str, Any]:
-    """Translate Comic Vine normalized data into Book ORM fields."""
+    """Translate Comic Vine normalized data into Book ORM fields.
+
+    Expects output from ComicVineClient._map_issue() which now provides:
+    - external_id: raw numeric id as string
+    - volume: dict with id + name (for series detection)
+    - issue_number: string
+    - cover_url / cover_url_large: image urls
+    """
     external_id = data.get("external_id")
     if not external_id:
         raise ValueError("external_id is required to persist a Comic Vine item")
@@ -238,14 +247,13 @@ def _book_kwargs_from_comic_vine(data: dict[str, Any]) -> dict[str, Any]:
         "ratings_count": 0,
         "kitabee_rating": None,
         "kitabee_ratings_count": 0,
-        "metadata_json": {},
+        "metadata_json": _build_comic_vine_metadata(data),
         "cached_at": now,
         "updated_at": now,
     }
 
 
 def _book_kwargs_from_internet_archive(data: dict[str, Any]) -> dict[str, Any]:
-    """Translate Internet Archive normalized data into Book ORM fields."""
     external_id = data.get("external_id")
     if not external_id:
         raise ValueError("external_id is required to persist an Internet Archive item")
@@ -288,19 +296,6 @@ async def upsert_book_from_comic_vine(
     db: AsyncSession,
     data: dict[str, Any],
 ) -> Book:
-    """Create or update a book row from Comic Vine normalized data.
-
-    Accepts output from content_normalizer.normalize_comic_vine_issue()
-    or normalize_comic_vine_volume(). Uses external_id + external_source
-    as the unique key.
-
-    Args:
-        db: Active async SQLAlchemy session.
-        data: Normalized ContentItem dict from the Comic Vine normalizer.
-
-    Returns:
-        Persisted Book ORM instance.
-    """
     values = _book_kwargs_from_comic_vine(data)
 
     existing = await get_book_by_external_id(
@@ -341,18 +336,6 @@ async def upsert_book_from_internet_archive(
     db: AsyncSession,
     data: dict[str, Any],
 ) -> Book:
-    """Create or update a book row from Internet Archive normalized data.
-
-    Accepts output from content_normalizer.normalize_internet_archive().
-    Uses external_id + external_source as the unique key.
-
-    Args:
-        db: Active async SQLAlchemy session.
-        data: Normalized ContentItem dict from the IA normalizer.
-
-    Returns:
-        Persisted Book ORM instance.
-    """
     values = _book_kwargs_from_internet_archive(data)
 
     existing = await get_book_by_external_id(
