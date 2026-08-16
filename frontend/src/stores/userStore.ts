@@ -5,8 +5,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export interface User {
   id: string;
   email: string;
-  full_name?: string;
-  onboarding_completed?: boolean;
+  name: string;
+  avatar_url?: string | null;
+  bio?: string | null;
+  onboarding_completed: boolean;
+  email_verified: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface UserStore {
