@@ -26,7 +26,11 @@ const HomeStackNavigator: React.FC = () => {
     >
       <Stack.Screen name="HomeMain" component={HomeScreen} />
       <Stack.Screen name="FullCollection" component={FullCollectionScreen} />
-      <Stack.Screen name="BookDetail" component={BookDetailScreen} />
+      <Stack.Screen
+        name="BookDetail"
+        component={BookDetailScreen}
+        getId={({ params }) => params.content_id}
+      />
     </Stack.Navigator>
   )
 }

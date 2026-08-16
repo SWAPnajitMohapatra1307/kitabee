@@ -42,6 +42,25 @@ export type SearchResponse = {
   results: Book[];
 };
 
+export type SeriesItem = {
+  content_id: string;
+  title: string | null;
+  position: number | null;
+  label:
+    | "You Are Here"
+    | "Read This First"
+    | "Read This Next"
+    | "Coming Up"
+    | "Also In This Series";
+};
+
+export type SeriesResponse = {
+  series_name: string;
+  total: number;
+  current_position: number | null;
+  items: SeriesItem[];
+} | null;
+
 export async function fetchBookById(contentId: string): Promise<Book> {
   const response = await api.get(`/books/${encodeURIComponent(contentId)}`);
   return response.data.data as Book;
@@ -68,4 +87,13 @@ export async function searchBooks(
   });
   const payload = response.data.data as SearchResponse;
   return payload?.results ?? [];
+}
+
+export async function fetchSeriesData(
+  contentId: string
+): Promise<SeriesResponse> {
+  const response = await api.get(
+    `/books/${encodeURIComponent(contentId)}/series`
+  );
+  return response.data.data as SeriesResponse;
 }

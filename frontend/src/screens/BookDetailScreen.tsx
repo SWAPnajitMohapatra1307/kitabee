@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import {
   View,
   Text,
@@ -12,12 +12,19 @@ import {
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useTheme } from "../theme/ThemeContext"
-import { fetchBookById, fetchSimilarBooks, Book } from "../services/books"
+import {
+  fetchBookById,
+  fetchSimilarBooks,
+  fetchSeriesData,
+  Book,
+  SeriesResponse,
+} from "../services/books"
 import { getMyRating, Rating } from "../services/ratings"
 import { LibraryStatus } from "../services/library"
 import { useLibraryStore } from "../stores/libraryStore"
 import CollectionRow from "../components/CollectionRow"
 import RatingModal from "../components/RatingModal"
+import SeriesOrderSection from "../components/SeriesOrderSection"
 import type { ContentSource } from "../services/collections"
 
 const STATUS_OPTIONS: { key: LibraryStatus; label: string }[] = [
@@ -36,6 +43,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
   const [book, setBook] = useState<Book | null>(null)
   const [loading, setLoading] = useState(true)
   const [similarBooks, setSimilarBooks] = useState<Book[]>([])
+  const [seriesData, setSeriesData] = useState<SeriesResponse>(null)
   const [existingRating, setExistingRating] = useState<Rating | null>(null)
   const [ratingModalVisible, setRatingModalVisible] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,23 +52,27 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
   const inLibrary = !!libraryItem
   const currentStatus = libraryItem?.status
 
-  useEffect(() => {
-    loadData()
-  }, [content_id])
-
-  const loadData = async () => {
+  const loadData = useCallback(async (id: string) => {
     setLoading(true)
     setError(null)
+    setBook(null)
+    setSimilarBooks([])
+    setSeriesData(null)
+    setExistingRating(null)
+
     try {
-      const [bookData, similarData, ratingData] = await Promise.all([
-        fetchBookById(content_id),
-        fetchSimilarBooks(content_id),
-        getMyRating(content_id),
-      ])
+      const [bookData, similarData, ratingData, seriesResult] =
+        await Promise.all([
+          fetchBookById(id),
+          fetchSimilarBooks(id),
+          getMyRating(id),
+          fetchSeriesData(id).catch(() => null),
+        ])
 
       setBook(bookData)
       setSimilarBooks(similarData)
       setExistingRating(ratingData)
+      setSeriesData(seriesResult)
 
       if (!libraryStore.loaded) {
         await libraryStore.load()
@@ -75,7 +87,11 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadData(content_id)
+  }, [content_id])
 
   const handleLibraryToggle = async () => {
     try {
@@ -147,6 +163,16 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           { backgroundColor: theme.background.primary, padding: spacing.sm },
         ]}
       >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ position: "absolute", top: spacing.lg, left: spacing.md }}
+        >
+          <Text
+            style={[typography["title-md"], { color: theme.text.primary }]}
+          >
+            ← Back
+          </Text>
+        </TouchableOpacity>
         <Text
           style={[
             typography["body-md"],
@@ -155,6 +181,22 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
         >
           {error || "Book not found"}
         </Text>
+        <TouchableOpacity
+          onPress={() => loadData(content_id)}
+          style={{
+            marginTop: spacing.md,
+            paddingVertical: spacing.xs,
+            paddingHorizontal: spacing.md,
+            backgroundColor: theme.brand.primary,
+            borderRadius: rounded.md,
+          }}
+        >
+          <Text
+            style={[typography["title-sm"], { color: theme.text.onPrimary }]}
+          >
+            Retry
+          </Text>
+        </TouchableOpacity>
       </SafeAreaView>
     )
   }
@@ -407,6 +449,17 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
               {book.description}
             </Text>
           </View>
+        )}
+
+        {/* Series section */}
+        {seriesData && (
+          <SeriesOrderSection
+            series={seriesData}
+            currentContentId={content_id}
+            onItemPress={(id) =>
+              navigation.push("BookDetail", { content_id: id })
+            }
+          />
         )}
 
         {similarBooks.length > 0 && (

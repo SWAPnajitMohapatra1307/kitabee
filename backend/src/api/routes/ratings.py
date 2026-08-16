@@ -103,28 +103,13 @@ async def rate_book(
     db: AsyncSession = Depends(get_db),
     content_router: ContentRouter = Depends(get_content_router),
 ):
-    """Create or update the current user's rating for a content item.
+    user_id: UUID = current_user.id
 
-    Args:
-        content_id: Prefixed content identifier (gb:, cv:, ia:).
-        payload: Rating data including star rating and optional review.
-        current_user: Authenticated user.
-        db: Database session.
-        content_router: For resolving unknown content_ids via external APIs.
-
-    Returns:
-        Success envelope wrapping RatingResponse.
-
-    Raises:
-        HTTPException 400: When content_id format is invalid.
-        HTTPException 404: When content is not found.
-        HTTPException 401: When user is not authenticated.
-    """
     service = RatingService(db)
     book_uuid = await _resolve_to_book_uuid(content_id, content_router, service)
 
     rating = await service.rate_book(
-        user_id=current_user.id,
+        user_id=user_id,
         book_id=book_uuid,
         payload=payload,
     )
@@ -141,25 +126,13 @@ async def get_my_book_rating(
     db: AsyncSession = Depends(get_db),
     content_router: ContentRouter = Depends(get_content_router),
 ):
-    """Get the current user's rating for a specific content item.
+    user_id: UUID = current_user.id
 
-    Args:
-        content_id: Prefixed content identifier.
-        current_user: Authenticated user.
-        db: Database session.
-        content_router: For resolving unknown content_ids.
-
-    Returns:
-        Success envelope wrapping RatingResponse.
-
-    Raises:
-        HTTPException 404: When rating or content is not found.
-    """
     service = RatingService(db)
     book_uuid = await _resolve_to_book_uuid(content_id, content_router, service)
 
     rating = await service.get_my_rating(
-        user_id=current_user.id,
+        user_id=user_id,
         book_id=book_uuid,
     )
     if rating is None:
@@ -183,25 +156,13 @@ async def delete_my_book_rating(
     db: AsyncSession = Depends(get_db),
     content_router: ContentRouter = Depends(get_content_router),
 ):
-    """Delete the current user's rating for a specific content item.
+    user_id: UUID = current_user.id
 
-    Args:
-        content_id: Prefixed content identifier.
-        current_user: Authenticated user.
-        db: Database session.
-        content_router: For resolving unknown content_ids.
-
-    Returns:
-        Success envelope with confirmation message.
-
-    Raises:
-        HTTPException 404: When rating or content is not found.
-    """
     service = RatingService(db)
     book_uuid = await _resolve_to_book_uuid(content_id, content_router, service)
 
     deleted = await service.delete_my_rating(
-        user_id=current_user.id,
+        user_id=user_id,
         book_id=book_uuid,
     )
     if not deleted:
@@ -225,20 +186,11 @@ async def get_my_ratings(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    """Get all ratings submitted by the current user, paginated.
+    user_id: UUID = current_user.id
 
-    Args:
-        current_user: Authenticated user.
-        db: Database session.
-        limit: Page size (1-100, default 20).
-        offset: Results to skip (default 0).
-
-    Returns:
-        Success envelope wrapping MyRatingsResponse.
-    """
     service = RatingService(db)
     ratings, total = await service.get_my_ratings(
-        user_id=current_user.id,
+        user_id=user_id,
         limit=limit,
         offset=offset,
     )
