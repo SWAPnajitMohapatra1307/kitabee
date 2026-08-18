@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   LibraryItem,
   LibraryStatus,
+  UpdateLibraryInput,
   getMyLibrary,
   addToLibrary,
   removeFromLibrary,
@@ -20,11 +21,13 @@ interface LibraryStore {
   addOptimistic: (item: LibraryItem) => void;
   removeOptimistic: (content_id: string) => void;
   setStatusOptimistic: (content_id: string, status: LibraryStatus) => void;
+  patchOptimistic: (content_id: string, updates: Partial<LibraryItem>) => void;
   getItem: (content_id: string) => LibraryItem | undefined;
 
   addToLibrary: (content_id: string, status?: LibraryStatus) => Promise<LibraryItem>;
   removeFromLibrary: (content_id: string) => Promise<void>;
   setStatus: (content_id: string, status: LibraryStatus) => Promise<LibraryItem>;
+  updateEntry: (content_id: string, updates: UpdateLibraryInput) => Promise<LibraryItem>;
 }
 
 export const useLibraryStore = create<LibraryStore>()(
@@ -78,6 +81,14 @@ export const useLibraryStore = create<LibraryStore>()(
         }));
       },
 
+      patchOptimistic: (content_id, updates) => {
+        set((state) => ({
+          items: state.items.map((i) =>
+            i.content_id === content_id ? { ...i, ...updates } : i
+          ),
+        }));
+      },
+
       getItem: (content_id) => {
         return get().items.find((i) => i.content_id === content_id);
       },
@@ -102,6 +113,18 @@ export const useLibraryStore = create<LibraryStore>()(
         get().setStatusOptimistic(content_id, status);
         try {
           const updated = await updateLibraryEntry(content_id, { status });
+          get().addOptimistic(updated);
+          return updated;
+        } catch (e) {
+          get().syncFromServer();
+          throw e;
+        }
+      },
+
+      updateEntry: async (content_id, updates) => {
+        get().patchOptimistic(content_id, updates as Partial<LibraryItem>);
+        try {
+          const updated = await updateLibraryEntry(content_id, updates);
           get().addOptimistic(updated);
           return updated;
         } catch (e) {

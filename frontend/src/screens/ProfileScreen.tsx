@@ -7,13 +7,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
 import { Button } from "../components/Button";
 import { api } from "../services/api";
-import { authService } from "../services/auth";
 import { useUserStore, User } from "../stores/userStore";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface LibraryCounts {
   reading: number;
@@ -21,8 +20,6 @@ interface LibraryCounts {
   finished: number;
   dropped: number;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatJoinDate(iso: string): string {
   const d = new Date(iso);
@@ -44,8 +41,6 @@ async function fetchLibraryCount(status: string): Promise<number> {
   }
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
 interface StatTileProps {
   label: string;
   value: number;
@@ -60,18 +55,34 @@ function StatTile({ label, value }: StatTileProps) {
         {
           backgroundColor: theme.background.card,
           borderRadius: rounded.md,
-          padding: spacing.md,
+          paddingVertical: spacing.md,
+          paddingHorizontal: spacing.sm,
         },
       ]}
     >
-      <Text style={[typography["number-display"], { color: theme.text.primary }]}>
+      <Text
+        style={{
+          color: theme.text.primary,
+          fontSize: 36,
+          fontWeight: "700",
+          lineHeight: 42,
+          textAlign: "center",
+        }}
+        numberOfLines={1}
+      >
         {value}
       </Text>
       <Text
         style={[
           typography["caption-uppercase"],
-          { color: theme.text.muted, marginTop: spacing.xs / 2 },
+          {
+            color: theme.text.muted,
+            marginTop: 8,
+            fontSize: 11,
+            textAlign: "center",
+          },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -84,14 +95,13 @@ const statTileStyles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 80,
+    minHeight: 96,
   },
 });
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
-
 export default function ProfileScreen() {
   const { theme, typography, spacing, rounded } = useTheme();
+  const navigation = useNavigation<any>();
 
   const [profile, setProfile] = useState<User | null>(null);
   const [counts, setCounts] = useState<LibraryCounts>({
@@ -106,17 +116,15 @@ export default function ProfileScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(false);
-    setProfile(null);
-    setCounts({ reading: 0, want_to_read: 0, finished: 0, dropped: 0 });
 
     try {
       const [meRes, reading, want_to_read, finished, dropped] =
         await Promise.all([
           api.get("/users/me"),
-           fetchLibraryCount("currently_reading"),
-            fetchLibraryCount("want_to_read"),
-            fetchLibraryCount("read"),
-            fetchLibraryCount("dnf"),
+          fetchLibraryCount("currently_reading"),
+          fetchLibraryCount("want_to_read"),
+          fetchLibraryCount("read"),
+          fetchLibraryCount("dnf"),
         ]);
 
       const user: User = meRes.data?.data;
@@ -136,22 +144,15 @@ export default function ProfileScreen() {
     loadData();
   }, [loadData]);
 
-  // ── Loading ──────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <View
-        style={[
-          styles.center,
-          { backgroundColor: theme.background.primary },
-        ]}
+        style={[styles.center, { backgroundColor: theme.background.primary }]}
       >
         <ActivityIndicator size="large" color={theme.brand.primary} />
       </View>
     );
   }
-
-  // ── Error ────────────────────────────────────────────────────────────────
 
   if (error || !profile) {
     return (
@@ -169,8 +170,6 @@ export default function ProfileScreen() {
     );
   }
 
-  // ── Content ──────────────────────────────────────────────────────────────
-
   return (
     <ScrollView
       style={{ backgroundColor: theme.background.primary }}
@@ -180,7 +179,22 @@ export default function ProfileScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Avatar placeholder + name ── */}
+      {/* Gear icon */}
+      <View style={styles.topBar}>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Settings")}
+          activeOpacity={0.7}
+          style={[
+            styles.gearBtn,
+            { backgroundColor: theme.background.elevated },
+          ]}
+        >
+          <Ionicons name="settings-outline" size={20} color={theme.text.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Avatar + name */}
       <View style={[styles.header, { gap: spacing.sm }]}>
         <View
           style={[
@@ -194,23 +208,19 @@ export default function ProfileScreen() {
           ]}
         >
           <Text
-            style={[
-              typography["display-lg"],
-              { color: theme.brand.primary },
-            ]}
+            style={[typography["display-lg"], { color: theme.brand.primary }]}
           >
             {profile.name.charAt(0).toUpperCase()}
           </Text>
         </View>
 
-        <Text
-          style={[typography["display-md"], { color: theme.text.primary }]}
-        >
+        <Text style={[typography["display-md"], { color: theme.text.primary }]}>
           {profile.name}
         </Text>
 
         <Text
           style={[typography["body-sm"], { color: theme.text.secondary }]}
+          numberOfLines={1}
         >
           {profile.email}
         </Text>
@@ -222,7 +232,7 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      {/* ── Divider ── */}
+      {/* Divider */}
       <View
         style={[
           styles.divider,
@@ -230,7 +240,7 @@ export default function ProfileScreen() {
         ]}
       />
 
-      {/* ── Library stats ── */}
+      {/* Library stats — 2x2 grid */}
       <View style={{ gap: spacing.sm }}>
         <Text
           style={[
@@ -250,39 +260,26 @@ export default function ProfileScreen() {
           <StatTile label="Dropped" value={counts.dropped} />
         </View>
       </View>
-
-      {/* ── Divider ── */}
-      <View
-        style={[
-          styles.divider,
-          { backgroundColor: theme.background.elevated },
-        ]}
-      />
-
-      {/* ── Logout ── */}
-      <Button
-        title="Log Out"
-        variant="outline"
-        onPress={() => authService.logout()}
-      />
     </ScrollView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  scroll: { flexGrow: 1 },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  gearBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  scroll: {
-    flexGrow: 1,
-  },
-  header: {
-    alignItems: "center",
-  },
+  header: { alignItems: "center" },
   avatar: {
     width: 80,
     height: 80,
@@ -290,11 +287,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 4,
   },
-  divider: {
-    height: 1,
-    width: "100%",
-  },
-  statsRow: {
-    flexDirection: "row",
-  },
+  divider: { height: 1, width: "100%" },
+  statsRow: { flexDirection: "row" },
 });

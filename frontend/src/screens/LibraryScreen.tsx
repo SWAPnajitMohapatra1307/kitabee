@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,85 +8,98 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
-} from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { useNavigation, useFocusEffect } from "@react-navigation/native"
-import { useTheme } from "../theme/ThemeContext"
-import { LibraryItem, LibraryStatus } from "../services/library"
-import { useLibraryStore } from "../stores/libraryStore"
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../theme/ThemeContext";
+import { LibraryItem, LibraryStatus } from "../services/library";
+import { useLibraryStore } from "../stores/libraryStore";
+import LibraryEditSheet from "../components/LibraryEditSheet";
 
-type FilterKey = "all" | LibraryStatus
+type FilterKey = "all" | LibraryStatus;
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "want_to_read", label: "Want to Read" },
+  { key: "want_to_read", label: "Want" },
   { key: "currently_reading", label: "Reading" },
   { key: "read", label: "Read" },
   { key: "dnf", label: "DNF" },
-]
+];
+
+const STATUS_LABELS: Record<LibraryStatus, string> = {
+  want_to_read: "Want to Read",
+  currently_reading: "Reading",
+  read: "Finished",
+  dnf: "Dropped",
+};
 
 const LibraryScreen: React.FC = () => {
-  const { theme, typography, spacing, rounded } = useTheme()
-  const navigation = useNavigation<any>()
+  const { theme, typography, spacing, rounded } = useTheme();
+  const navigation = useNavigation<any>();
 
-  const items = useLibraryStore((s) => s.items)
-  const loaded = useLibraryStore((s) => s.loaded)
-  const loading = useLibraryStore((s) => s.loading)
-  const load = useLibraryStore((s) => s.load)
-  const syncFromServer = useLibraryStore((s) => s.syncFromServer)
+  const items = useLibraryStore((s) => s.items);
+  const loaded = useLibraryStore((s) => s.loaded);
+  const loading = useLibraryStore((s) => s.loading);
+  const load = useLibraryStore((s) => s.load);
+  const syncFromServer = useLibraryStore((s) => s.syncFromServer);
 
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<FilterKey>("all")
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [editing, setEditing] = useState<LibraryItem | null>(null);
 
   useEffect(() => {
     if (!loaded) {
-      load().catch((e) =>
-        setError(e?.message || "Failed to load library")
-      )
+      load().catch((e) => setError(e?.message || "Failed to load library"));
     }
-  }, [loaded, load])
+  }, [loaded, load]);
 
   useFocusEffect(
     useCallback(() => {
       syncFromServer().catch((e) =>
-        setError(e?.message || "Failed to refresh library")
-      )
-    }, [syncFromServer])
-  )
+        setError(e?.message || "Failed to refresh library"),
+      );
+    }, [syncFromServer]),
+  );
 
   const onRefresh = async () => {
-    setRefreshing(true)
+    setRefreshing(true);
     try {
-      setError(null)
-      await syncFromServer()
+      setError(null);
+      await syncFromServer();
     } catch (e: any) {
-      setError(e?.message || "Failed to refresh library")
+      setError(e?.message || "Failed to refresh library");
     } finally {
-      setRefreshing(false)
+      setRefreshing(false);
     }
-  }
+  };
 
   const filteredItems = useMemo(() => {
-    if (filter === "all") return items
-    return items.filter((i) => i.status === filter)
-  }, [items, filter])
+    if (filter === "all") return items;
+    return items.filter((i) => i.status === filter);
+  }, [items, filter]);
+
+  const openDetail = (item: LibraryItem) => {
+    navigation.navigate("Home", {
+      screen: "BookDetail",
+      params: { content_id: item.content_id },
+    });
+  };
 
   const renderItem = ({ item }: { item: LibraryItem }) => (
     <TouchableOpacity
       activeOpacity={0.75}
-      onPress={() =>
-        navigation.navigate("Home", {
-          screen: "BookDetail",
-          params: { content_id: item.content_id },
-        })
-      }
+      onPress={() => openDetail(item)}
+      onLongPress={() => setEditing(item)}
+      delayLongPress={300}
       style={{
         flexDirection: "row",
         padding: spacing.xs,
         marginBottom: spacing.xxs,
         backgroundColor: theme.background.elevated,
         borderRadius: rounded.md,
+        alignItems: "center",
       }}
     >
       {item.cover_url ? (
@@ -117,12 +130,27 @@ const LibraryScreen: React.FC = () => {
           justifyContent: "center",
         }}
       >
-        <Text
-          numberOfLines={2}
-          style={[typography["title-sm"], { color: theme.text.primary }]}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }}
         >
-          {item.title || "Untitled"}
-        </Text>
+          <Text
+            numberOfLines={2}
+            style={[
+              typography["title-sm"],
+              { color: theme.text.primary, flexShrink: 1 },
+            ]}
+          >
+            {item.title || "Untitled"}
+          </Text>
+          {item.is_favorite && (
+            <Ionicons name="heart" size={14} color={theme.brand.primary} />
+          )}
+        </View>
+
         {item.authors && item.authors.length > 0 && (
           <Text
             numberOfLines={1}
@@ -134,19 +162,57 @@ const LibraryScreen: React.FC = () => {
             {item.authors.join(", ")}
           </Text>
         )}
-        <Text
-          style={[
-            typography["caption-uppercase"],
-            { color: theme.text.muted, marginTop: 4 },
-          ]}
-        >
-          {item.status.replace(/_/g, " ")}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  )
 
-  const showFullLoader = loading && !loaded
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginTop: 4,
+            gap: 8,
+          }}
+        >
+          <Text
+            style={[
+              typography["caption-uppercase"],
+              { color: theme.text.muted },
+            ]}
+          >
+            {STATUS_LABELS[item.status]}
+          </Text>
+          {item.status === "currently_reading" &&
+            item.current_page != null &&
+            item.total_pages != null && (
+              <Text
+                style={[
+                  typography["caption-uppercase"],
+                  { color: theme.brand.primary },
+                ]}
+              >
+                {Math.round((item.current_page / item.total_pages) * 100)}%
+              </Text>
+            )}
+        </View>
+      </View>
+
+      <TouchableOpacity
+        onPress={() => setEditing(item)}
+        activeOpacity={0.6}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        style={{
+          padding: 8,
+          marginLeft: 4,
+        }}
+      >
+        <Ionicons
+          name="ellipsis-vertical"
+          size={20}
+          color={theme.text.muted}
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  const showFullLoader = loading && !loaded;
 
   return (
     <SafeAreaView
@@ -175,7 +241,7 @@ const LibraryScreen: React.FC = () => {
         }}
       >
         {FILTERS.map((f) => {
-          const active = filter === f.key
+          const active = filter === f.key;
           return (
             <TouchableOpacity
               key={f.key}
@@ -205,7 +271,7 @@ const LibraryScreen: React.FC = () => {
                 {f.label}
               </Text>
             </TouchableOpacity>
-          )
+          );
         })}
       </View>
 
@@ -244,9 +310,15 @@ const LibraryScreen: React.FC = () => {
           }
         />
       )}
+
+      <LibraryEditSheet
+        visible={editing !== null}
+        item={editing}
+        onClose={() => setEditing(null)}
+      />
     </SafeAreaView>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   center: {
@@ -255,6 +327,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-})
+});
 
-export default LibraryScreen
+export default LibraryScreen;
