@@ -5,6 +5,7 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  useWindowDimensions,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native"
@@ -19,12 +20,22 @@ type FullCollectionNavProp = NativeStackNavigationProp<
   "FullCollection"
 >
 
+function getColumnCount(width: number): number {
+  if (width >= 1400) return 6
+  if (width >= 1024) return 5
+  if (width >= 768) return 4
+  if (width >= 480) return 3
+  return 2
+}
+
 const FullCollectionScreen: React.FC = () => {
   const { theme, typography, spacing } = useTheme()
   const route = useRoute<FullCollectionRouteProp>()
   const navigation = useNavigation<FullCollectionNavProp>()
+  const { width } = useWindowDimensions()
 
   const { title, items } = route.params
+  const numColumns = getColumnCount(width)
 
   return (
     <SafeAreaView
@@ -46,10 +57,7 @@ const FullCollectionScreen: React.FC = () => {
           style={{ paddingRight: spacing.xs }}
         >
           <Text
-            style={[
-              typography["title-md"],
-              { color: theme.text.primary },
-            ]}
+            style={[typography["title-md"], { color: theme.text.primary }]}
           >
             ‹
           </Text>
@@ -66,16 +74,23 @@ const FullCollectionScreen: React.FC = () => {
       </View>
 
       <FlatList
+        key={`cols-${numColumns}`}
         data={items}
         keyExtractor={(item) => item.content_id}
-        numColumns={2}
+        numColumns={numColumns}
         contentContainerStyle={{ padding: spacing.xs }}
-        columnWrapperStyle={{ justifyContent: "space-between" }}
+        columnWrapperStyle={
+          numColumns > 1
+            ? { gap: spacing.xs }
+            : undefined
+        }
         renderItem={({ item }) => (
-          <View style={{ marginBottom: spacing.xs }}>
+          <View style={{ flex: 1 / numColumns, marginBottom: spacing.xs }}>
             <ContentCard
               item={item}
-           onPress={(i) => navigation.navigate("BookDetail", { content_id: i.content_id })}
+              onPress={(i) =>
+                navigation.navigate("BookDetail", { content_id: i.content_id })
+              }
             />
           </View>
         )}
@@ -88,10 +103,7 @@ const FullCollectionScreen: React.FC = () => {
             }}
           >
             <Text
-              style={[
-                typography["body-md"],
-                { color: theme.text.secondary },
-              ]}
+              style={[typography["body-md"], { color: theme.text.secondary }]}
             >
               No items in this collection.
             </Text>

@@ -131,7 +131,7 @@ export default function MainTabNavigator() {
             <TabIcon name={focused ? "stats-chart" : "stats-chart-outline"} color={color} focused={focused} />
           ),
           tabBarLabel: ({ color, focused }) => (
-            <TabLabel label="STATS" color={color} focused={focused} />
+           <TabLabel label="INSIGHTS" color={color} focused={focused} />
           ),
         }}
       />

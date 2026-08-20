@@ -75,6 +75,7 @@ class CollectionService:
         )
 
         rows: list[dict[str, Any]] = []
+        used_item_ids: set[str] = set()
 
         because_row = self._build_because_you_loved_row(
             catalog=filtered_catalog,
@@ -84,28 +85,45 @@ class CollectionService:
         )
         if because_row:
             rows.append(because_row)
+            used_item_ids.update(str(i) for i in because_row.get("items", []))
 
         personalized_row = self._build_personalized_row(
             catalog=filtered_catalog,
             user_id=user_id,
             user_ratings=ratings,
             row_limit=row_limit,
+            exclude_ids=used_item_ids,
         )
         if personalized_row:
             rows.append(personalized_row)
+            used_item_ids.update(str(i) for i in personalized_row.get("items", []))
 
         cluster_rows = self._build_cluster_rows(
             catalog=filtered_catalog,
             user_ratings=ratings,
             row_limit=row_limit,
         )
-        rows.extend(cluster_rows)
+        for row in cluster_rows:
+            items = [i for i in row.get("items", []) if str(i) not in used_item_ids]
+            if not items:
+                continue
+            row["items"] = items[:row_limit]
+            row["item_count"] = len(row["items"])
+            used_item_ids.update(str(i) for i in row["items"])
+            rows.append(row)
 
         special_rows = self._build_special_rows(
             catalog=catalog,
             row_limit=row_limit,
         )
-        rows.extend(special_rows)
+        for row in special_rows:
+            items = [i for i in row.get("items", []) if str(i) not in used_item_ids]
+            if not items:
+                continue
+            row["items"] = items[:row_limit]
+            row["item_count"] = len(row["items"])
+            used_item_ids.update(str(i) for i in row["items"])
+            rows.append(row)
 
         seen_ids: set[str] = set()
         unique_rows: list[dict[str, Any]] = []
@@ -161,6 +179,7 @@ class CollectionService:
         user_id: str | None,
         user_ratings: list[dict[str, Any]],
         row_limit: int,
+        exclude_ids: set[str] | None = None,
     ) -> dict[str, Any] | None:
         """Build a 'Picked for You' row using hybrid recommendations."""
         if not user_id or not user_ratings or not catalog:
@@ -173,11 +192,20 @@ class CollectionService:
                 user_id=user_id,
                 user_ratings=user_ratings,
                 content_metadata=metadata,
-                n=row_limit,
+                n=row_limit * 3,
+                exclude_ids=list(exclude_ids) if exclude_ids else None,
             )
         except Exception:
             logger.warning("Failed to build personalized row", exc_info=True)
             return None
+
+        if not recommended_ids:
+            return None
+
+        if exclude_ids:
+            recommended_ids = [i for i in recommended_ids if i not in exclude_ids]
+
+        recommended_ids = recommended_ids[:row_limit]
 
         if not recommended_ids:
             return None

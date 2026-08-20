@@ -7,6 +7,7 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import get_db, get_content_router
 from src.api.response import success_envelope
 from src.auth.jwt_handler import verify_token
+from src.cache.redis_client import redis_client
 from src.database.crud.preferences import get_preferences
 from src.database.crud.rating import get_ratings_by_user
 from src.database.crud.user import get_by_id
@@ -34,8 +36,10 @@ router = APIRouter(tags=["collections"])
 
 _bearer = HTTPBearer(auto_error=False)
 
+_TTL_ENRICHED_ITEM = 60 * 60 * 24
+_TTL_COLLECTIONS_RESPONSE = 60 * 10
+
 _CATALOG_SEED: list[dict[str, Any]] = [
-    # ── Sci-Fi ──────────────────────────────────────────────────────────────
     {
         "id": "seed-1", "title": "Dune",
         "description": "A science fiction epic set on a desert planet about politics, religion and survival.",
@@ -204,7 +208,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "Old Man's War John Scalzi", "published_date": "2005",
     },
-    # ── Fantasy ─────────────────────────────────────────────────────────────
     {
         "id": "seed-9", "title": "The Name of the Wind",
         "description": "A legendary wizard recounts his extraordinary life story from a quiet inn.",
@@ -317,7 +320,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "The Priory of the Orange Tree Samantha Shannon", "published_date": "2019",
     },
-    # ── Literary / Magical Realism ───────────────────────────────────────────
     {
         "id": "seed-10", "title": "Kafka on the Shore",
         "description": "A surreal journey of a runaway boy and an old man who can talk to cats.",
@@ -430,7 +432,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "Siddhartha Hermann Hesse", "published_date": "1922",
     },
-    # ── Mystery / Thriller ───────────────────────────────────────────────────
     {
         "id": "seed-50", "title": "The Girl with the Dragon Tattoo",
         "description": "A disgraced journalist and a hacker investigate a wealthy family's dark secrets.",
@@ -515,7 +516,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "The Girl on the Train Paula Hawkins", "published_date": "2015",
     },
-    # ── Romance ─────────────────────────────────────────────────────────────
     {
         "id": "seed-60", "title": "Jane Eyre",
         "description": "An orphan governess falls for the brooding, secretive Mr Rochester.",
@@ -579,7 +579,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "The Bronze Horseman Paullina Simons", "published_date": "2000",
     },
-    # ── Horror ──────────────────────────────────────────────────────────────
     {
         "id": "seed-80", "title": "It",
         "description": "A shapeshifting evil preys on children in a small Maine town across two timelines.",
@@ -636,7 +635,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "The Terror Dan Simmons", "published_date": "2007",
     },
-    # ── Inspiring / Non-fiction ──────────────────────────────────────────────
     {
         "id": "seed-70", "title": "Sapiens",
         "description": "A sweeping history of humankind from the Stone Age to the Silicon Age.",
@@ -735,7 +733,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "The Tipping Point Malcolm Gladwell", "published_date": "2000",
     },
-    # ── Historical Fiction ───────────────────────────────────────────────────
     {
         "id": "seed-900", "title": "All the Light We Cannot See",
         "description": "A blind French girl and a German soldier's fates intersect in occupied France.",
@@ -778,7 +775,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "source": SOURCE_GOOGLE_BOOKS,
         "search_query": "The Name of the Rose Umberto Eco", "published_date": "1980",
     },
-    # ── Public domain ────────────────────────────────────────────────────────
     {
         "id": "seed-6", "title": "Pride and Prejudice",
         "description": "Elizabeth Bennet and the proud Mr Darcy navigate love and class in Regency England.",
@@ -883,7 +879,6 @@ _CATALOG_SEED: list[dict[str, Any]] = [
         "search_query": "Adventures of Sherlock Holmes Arthur Conan Doyle",
         "published_date": "1892", "is_public_domain": True,
     },
-    # ── Comics / Graphic Novels ──────────────────────────────────────────────
     {
         "id": "seed-8", "title": "Saga",
         "description": "Two soldiers from opposite sides of a galactic war raise a child on the run.",
@@ -1045,12 +1040,49 @@ def _source_prefix(external_source: str) -> str:
     return "gb"
 
 
+def _enrich_cache_key(seed_id: str, source: str, query: str) -> str:
+    digest = hashlib.md5(f"{source}|{query}".encode("utf-8")).hexdigest()[:12]
+    return f"enrich:v1:{seed_id}:{digest}"
+
+
+def _collections_cache_key(
+    user_id: str | None,
+    content_preference: str,
+    n_collections: int,
+    row_limit: int,
+    ratings_fingerprint: str,
+) -> str:
+    if user_id is None:
+        who = "anon"
+    else:
+        who = f"u:{user_id}:{ratings_fingerprint}"
+    return f"collections:v1:{who}:{content_preference}:{n_collections}:{row_limit}"
+
+
+def _ratings_fingerprint(user_ratings: list[dict[str, Any]]) -> str:
+    if not user_ratings:
+        return "no-ratings"
+    parts = sorted(
+        f"{r.get('content_id', '')}:{r.get('rating', '')}"
+        for r in user_ratings
+    )
+    digest = hashlib.md5("|".join(parts).encode("utf-8")).hexdigest()[:10]
+    return digest
+
+
 async def _enrich_item_real(
     seed: dict[str, Any],
     content_router: ContentRouter,
 ) -> dict[str, Any] | None:
     source = seed.get("source", SOURCE_GOOGLE_BOOKS)
     query = seed.get("search_query") or seed.get("title", "")
+    seed_id = str(seed.get("id", ""))
+
+    cache_key = _enrich_cache_key(seed_id, source, query)
+
+    cached = await redis_client.get(cache_key)
+    if isinstance(cached, dict):
+        return cached
 
     try:
         if source == SOURCE_GOOGLE_BOOKS:
@@ -1070,7 +1102,7 @@ async def _enrich_item_real(
 
         if results:
             item = results[0]
-            return {
+            enriched = {
                 "content_id": item["content_id"],
                 "title": item["title"],
                 "author": item.get("author") or "Unknown",
@@ -1082,11 +1114,13 @@ async def _enrich_item_real(
                 "description": item.get("description"),
                 "genres": item.get("genres") or seed.get("genres", []),
             }
+            await redis_client.set(cache_key, enriched, ttl_seconds=_TTL_ENRICHED_ITEM)
+            return enriched
 
     except Exception:
         logger.warning(
             "Failed to enrich seed item from API",
-            extra={"seed_id": seed.get("id"), "source": source, "query": query},
+            extra={"seed_id": seed_id, "source": source, "query": query},
             exc_info=True,
         )
 
@@ -1197,6 +1231,19 @@ async def get_collections(
         if prefs is not None and hasattr(prefs, "content_type_preference"):
             content_preference = getattr(prefs, "content_type_preference", "both")
 
+    fingerprint = _ratings_fingerprint(user_ratings)
+    response_cache_key = _collections_cache_key(
+        user_id=user_id,
+        content_preference=content_preference,
+        n_collections=n_collections,
+        row_limit=row_limit,
+        ratings_fingerprint=fingerprint,
+    )
+
+    cached_response = await redis_client.get(response_cache_key)
+    if isinstance(cached_response, dict) and "rows" in cached_response:
+        return success_envelope(cached_response)
+
     service = CollectionService()
     rows = service.build_home_screen(
         catalog=_CATALOG_SEED,
@@ -1220,10 +1267,16 @@ async def get_collections(
                 extra={"error": str(result)},
             )
 
-    return success_envelope(
-        {
-            "rows": final_rows,
-            "total": len(final_rows),
-            "personalized": user_id is not None and len(user_ratings) > 0,
-        }
+    payload = {
+        "rows": final_rows,
+        "total": len(final_rows),
+        "personalized": user_id is not None and len(user_ratings) > 0,
+    }
+
+    await redis_client.set(
+        response_cache_key,
+        payload,
+        ttl_seconds=_TTL_COLLECTIONS_RESPONSE,
     )
+
+    return success_envelope(payload)
