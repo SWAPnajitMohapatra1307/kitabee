@@ -1,454 +1,420 @@
-"""Content router — dispatches fetch requests by content_id prefix.
-
-Given a prefixed content_id (e.g. "gb:ByLKDQAAQBAJ"), this module
-determines which external API to call, fetches the raw data, normalizes
-it into a unified ContentItem dict, and optionally persists it to the DB.
-
-Prefix conventions:
-    gb:{id}  — Google Books
-    cv:{id}  — Comic Vine issue
-    ia:{id}  — Internet Archive
-"""
+"""ContentRouter service for resolving external content items and seed fallbacks."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any, Callable, Coroutine, cast
+from urllib.parse import quote, unquote
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException, status
 
 from src.external.google_books import GoogleBooksClient
 from src.external.comic_vine import ComicVineClient
 from src.external.internet_archive import InternetArchiveClient
 from src.services.content_normalizer import (
-    PREFIX_CV,
-    PREFIX_GB,
-    PREFIX_IA,
-    SOURCE_COMIC_VINE,
     SOURCE_GOOGLE_BOOKS,
+    SOURCE_COMIC_VINE,
     SOURCE_INTERNET_ARCHIVE,
-    normalize_comic_vine_issue,
-    normalize_google_books,
-    normalize_internet_archive,
-    parse_content_id,
-)
-from src.database.crud.book import (
-    get_book_by_external_id,
-    upsert_book_from_google,
-    upsert_book_from_comic_vine,
-    upsert_book_from_internet_archive,
 )
 
 logger = logging.getLogger(__name__)
 
+AsyncCallable = Callable[..., Coroutine[Any, Any, Any]]
+
+
+def optimize_cover_url(url: str | None, width: int = 260) -> str | None:
+    """Normalize and optimize cover URLs across Google, Comic Vine, IA, and Open Library."""
+    if not url or not isinstance(url, str):
+        return None
+
+    url = url.strip()
+    if not url:
+        return None
+
+    # Force HTTPS
+    if url.startswith("http://"):
+        url = "https://" + url[7:]
+
+    # 1. GOOGLE BOOKS: Bypass wsrv.nl proxy (Google blocks proxy scrapers with 403)
+    if "books.google.com" in url or "googleusercontent.com" in url:
+        if "edge=curl" in url:
+            url = url.replace("edge=curl", "")
+        return url
+
+    # Strip pre-existing wsrv.nl proxy wrappers to avoid duplicate proxying
+    if "wsrv.nl/?url=" in url:
+        parts = url.split("wsrv.nl/?url=")
+        url = unquote(parts[-1].split("&")[0])
+
+    # 2. COMIC VINE, INTERNET ARCHIVE, OPEN LIBRARY, & OTHERS:
+    # Route through Cloudflare Edge CDN (wsrv.nl) -> converts heavy PNG/JPG into ~15KB WebP
+    encoded_target = quote(url, safe="")
+    return f"https://wsrv.nl/?url={encoded_target}&w={width}&output=webp"
+
 
 class ContentRouter:
-    """Fetches and normalizes content from any supported external source.
-
-    Injected with all three API clients and a DB session. Route handlers
-    receive one per request via FastAPI Depends.
-    """
+    """Routes content requests to Google Books, Comic Vine, Internet Archive, or seed fallback."""
 
     def __init__(
         self,
-        google_books: GoogleBooksClient,
-        comic_vine: ComicVineClient,
-        internet_archive: InternetArchiveClient,
-        db: AsyncSession,
+        gb_client: GoogleBooksClient | None = None,
+        cv_client: ComicVineClient | None = None,
+        ia_client: InternetArchiveClient | None = None,
+        google_books: GoogleBooksClient | None = None,
+        comic_vine: ComicVineClient | None = None,
+        internet_archive: InternetArchiveClient | None = None,
+        google_books_client: GoogleBooksClient | None = None,
+        comic_vine_client: ComicVineClient | None = None,
+        internet_archive_client: InternetArchiveClient | None = None,
+        **kwargs: Any,
     ) -> None:
-        self._gb = google_books
-        self._cv = comic_vine
-        self._ia = internet_archive
-        self._db = db
+        """Initialize ContentRouter accepting all parameter alias variations."""
+        self._gb_client = (
+            gb_client or google_books or google_books_client or GoogleBooksClient()
+        )
+        self._cv_client = (
+            cv_client or comic_vine or comic_vine_client or ComicVineClient()
+        )
+        self._ia_client = (
+            ia_client or internet_archive or internet_archive_client or InternetArchiveClient()
+        )
 
-    async def get_by_content_id(
-        self,
-        content_id: str,
-    ) -> Optional[dict[str, Any]]:
-        """Fetch and normalize a single item by prefixed content_id.
+    def parse_content_id(self, content_id: str) -> tuple[str, str]:
+        """Parse 'prefix:id' string into (source_name, raw_id)."""
+        if ":" not in content_id:
+            return SOURCE_GOOGLE_BOOKS, content_id
+        prefix, raw_id = content_id.split(":", 1)
+        prefix_map = {
+            "gb": SOURCE_GOOGLE_BOOKS,
+            "cv": SOURCE_COMIC_VINE,
+            "ia": SOURCE_INTERNET_ARCHIVE,
+        }
+        source = prefix_map.get(prefix.lower(), SOURCE_GOOGLE_BOOKS)
+        return source, raw_id
 
-        Read order for all sources:
-            1. PostgreSQL — check if already persisted.
-            2. External API — fetch, normalize, persist, return.
+    async def get_by_content_id(self, content_id: str) -> dict[str, Any]:
+        """Fetch book details instantly from catalog or fallback to live search."""
+        from src.api.routes.collections import _CATALOG_BY_ID
 
-        Args:
-            content_id: Prefixed ID like "gb:ByLKDQAAQBAJ".
+        source, raw_id = self.parse_content_id(content_id)
 
-        Returns:
-            Normalized ContentItem dict, or None when not found.
-        """
-        parsed = parse_content_id(content_id)
-        if parsed is None:
+        # 1. Instant Catalog Lookup
+        catalog_item = (
+            _CATALOG_BY_ID.get(content_id)
+            or _CATALOG_BY_ID.get(raw_id)
+            or _CATALOG_BY_ID.get(f"seed-{raw_id}")
+        )
+        if catalog_item:
+            author = catalog_item.get("author")
+            authors = catalog_item.get("authors", [])
+            if not author and authors:
+                author = authors[0] if isinstance(authors, list) else str(authors)
+
+            raw_cover = catalog_item.get("cover_url", "")
+            optimized_cover = optimize_cover_url(raw_cover) or ""
+
+            return {
+                "content_id": catalog_item.get("content_id", content_id),
+                "external_id": raw_id,
+                "external_source": catalog_item.get("source", source),
+                "title": catalog_item.get("title", "Unknown Title"),
+                "author": author or "Unknown Author",
+                "authors": authors if isinstance(authors, list) else ([author] if author else []),
+                "description": catalog_item.get("description", ""),
+                "cover_url": optimized_cover,
+                "genres": catalog_item.get("genres", []),
+                "source": catalog_item.get("source", source),
+                "published_date": catalog_item.get("published_date", ""),
+                "content_type": catalog_item.get("content_type", "book"),
+                "is_free": catalog_item.get("is_free", False),
+                "free_url": catalog_item.get("free_url"),
+            }
+
+        # 2. Live External API Fallback
+        item: dict[str, Any] | None = None
+        try:
+            if source == SOURCE_GOOGLE_BOOKS:
+                raw_gb = await self._gb_client.get_by_id(raw_id)
+                if raw_gb:
+                    item = self._normalize_gb_item(raw_gb)
+            elif source == SOURCE_COMIC_VINE:
+                raw_cv = await self._fetch_cv_by_id(raw_id)
+                if raw_cv:
+                    item = self._normalize_generic_item(raw_cv, default_source="comic_vine", default_type="comic")
+            elif source == SOURCE_INTERNET_ARCHIVE:
+                raw_ia = await self._fetch_ia_by_id(raw_id)
+                if raw_ia:
+                    item = self._normalize_generic_item(raw_ia, default_source="internet_archive", default_type="book", is_free=True)
+        except Exception as exc:
             logger.warning(
-                "Invalid content_id format",
-                extra={"content_id": content_id},
+                "External API fetch failed for content_id",
+                extra={"content_id": content_id, "error": str(exc)},
             )
-            return None
+            item = None
 
-        prefix, raw_id = parsed
+        if item:
+            return item
 
-        if prefix == PREFIX_GB:
-            return await self._fetch_google_books(raw_id)
-        if prefix == PREFIX_CV:
-            return await self._fetch_comic_vine(raw_id)
-        if prefix == PREFIX_IA:
-            return await self._fetch_internet_archive(raw_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Content not found: {content_id}",
+        )
 
-        logger.warning("Unhandled prefix", extra={"prefix": prefix})
+    def _normalize_gb_item(self, raw: dict[str, Any]) -> dict[str, Any]:
+        raw_id = str(raw.get("google_books_id") or raw.get("external_id") or raw.get("id") or "")
+        cid = f"gb:{raw_id}" if not raw_id.startswith("gb:") else raw_id
+        clean_raw_id = raw_id.replace("gb:", "")
+
+        authors = raw.get("authors") or []
+        author = raw.get("author")
+        if not author and authors:
+            author = authors[0] if isinstance(authors, list) else str(authors)
+
+        raw_cover = (
+            raw.get("cover_url")
+            or raw.get("thumbnail_url")
+            or raw.get("small_thumbnail_url")
+            or ""
+        )
+        optimized_cover = optimize_cover_url(raw_cover) or ""
+
+        genres = raw.get("categories") or raw.get("genres") or []
+
+        return {
+            "content_id": cid,
+            "external_id": clean_raw_id,
+            "external_source": "google_books",
+            "title": raw.get("title") or "Unknown Title",
+            "author": author or "Unknown Author",
+            "authors": authors if isinstance(authors, list) else ([author] if author else []),
+            "description": raw.get("description") or "",
+            "cover_url": optimized_cover,
+            "content_type": "book",
+            "is_free": False,
+            "free_url": None,
+            "genres": genres if isinstance(genres, list) else [str(genres)],
+            "source": "google_books",
+            "published_date": str(raw.get("published_date") or ""),
+        }
+
+    def _normalize_generic_item(
+        self,
+        raw: dict[str, Any],
+        default_source: str,
+        default_type: str = "book",
+        is_free: bool = False,
+    ) -> dict[str, Any]:
+        prefix = "cv" if default_source == "comic_vine" else ("ia" if default_source == "internet_archive" else "gb")
+        
+        # Raw identifier extraction
+        raw_id = str(
+            raw.get("external_id")
+            or raw.get("id")
+            or raw.get("google_books_id")
+            or ""
+        ).replace("ia_", "").replace("cv:", "").replace("gb:", "")
+
+        cid = str(raw.get("content_id") or (f"{prefix}:{raw_id}" if raw_id else ""))
+
+        authors = raw.get("authors") or []
+        author = raw.get("author")
+        if not author and authors:
+            author = authors[0] if isinstance(authors, list) else str(authors)
+
+        raw_cover = (
+            raw.get("cover_url")
+            or raw.get("cover_image")
+            or raw.get("thumbnail_url")
+            or raw.get("cover_url_large")
+            or ""
+        )
+        optimized_cover = optimize_cover_url(raw_cover) or ""
+
+        ctype = raw.get("content_type") or default_type
+        if default_source == "comic_vine":
+            ctype = "comic"
+
+        free_flag = bool(raw.get("is_free", is_free))
+        if default_source == "internet_archive":
+            free_flag = True
+
+        free_link = raw.get("free_url") or raw.get("read_url") or raw.get("detail_url")
+        if default_source == "internet_archive" and not free_link and raw_id:
+            free_link = f"https://archive.org/details/{raw_id}"
+
+        return {
+            "content_id": cid,
+            "external_id": raw_id,
+            "external_source": default_source,
+            "title": raw.get("title") or "Unknown Title",
+            "author": author or "Unknown Author",
+            "authors": authors if isinstance(authors, list) else ([author] if author else []),
+            "description": raw.get("description") or "",
+            "cover_url": optimized_cover,
+            "content_type": ctype,
+            "is_free": free_flag,
+            "free_url": free_link if free_flag else None,
+            "genres": raw.get("genres") or raw.get("subjects") or [],
+            "source": default_source,
+            "published_date": str(raw.get("published_date") or ""),
+        }
+
+    async def _fetch_cv_by_id(self, raw_id: str) -> dict[str, Any] | None:
+        for method_name in ("get_comic", "get_by_id", "get_volume", "get_issue"):
+            raw_method = getattr(self._cv_client, method_name, None)
+            if callable(raw_method):
+                try:
+                    fn = cast(AsyncCallable, raw_method)
+                    res = await fn(raw_id)  # pyright: ignore[reportGeneralTypeIssues]
+                    if res and isinstance(res, dict):
+                        return res
+                except Exception:
+                    pass
         return None
 
-    async def get_similar(
-        self,
-        content_id: str,
-        limit: int = 10,
-    ) -> list[dict[str, Any]]:
-        """Fetch similar content based on a source item's metadata.
+    async def _fetch_ia_by_id(self, raw_id: str) -> dict[str, Any] | None:
+        for method_name in ("get_item", "get_by_id", "get_book_details", "get_details"):
+            raw_method = getattr(self._ia_client, method_name, None)
+            if callable(raw_method):
+                try:
+                    fn = cast(AsyncCallable, raw_method)
+                    res = await fn(raw_id)  # pyright: ignore[reportGeneralTypeIssues]
+                    if res and isinstance(res, dict):
+                        return res
+                except Exception:
+                    pass
+        return None
 
-        Strategy per source:
-            gb: — search Google Books by author + genre of source item
-            cv: — search Comic Vine by series name of source item
-            ia: — search Internet Archive by subject of source item
+    async def _search_cv(self, query: str, limit: int) -> list[dict[str, Any]]:
+        for method_name in ("search_comics", "search", "search_volumes", "search_issues"):
+            raw_method = getattr(self._cv_client, method_name, None)
+            if callable(raw_method):
+                try:
+                    fn = cast(AsyncCallable, raw_method)
+                    try:
+                        res = await fn(query, limit=limit)  # pyright: ignore[reportGeneralTypeIssues]
+                    except TypeError:
+                        try:
+                            res = await fn(query, max_results=limit)  # pyright: ignore[reportGeneralTypeIssues]
+                        except TypeError:
+                            res = await fn(query)  # pyright: ignore[reportGeneralTypeIssues]
+                    if isinstance(res, list):
+                        return res
+                except Exception:
+                    pass
+        return []
 
-        Args:
-            content_id: Prefixed ID of the source item.
-            limit: Maximum number of similar items to return.
-
-        Returns:
-            List of normalized ContentItem dicts (may be empty).
-        """
-        source_item = await self.get_by_content_id(content_id)
-        if source_item is None:
-            return []
-
-        parsed = parse_content_id(content_id)
-        if parsed is None:
-            return []
-
-        prefix, raw_id = parsed
-
-        if prefix == PREFIX_GB:
-            return await self._similar_google_books(source_item, raw_id, limit)
-        if prefix == PREFIX_CV:
-            return await self._similar_comic_vine(source_item, raw_id, limit)
-        if prefix == PREFIX_IA:
-            return await self._similar_internet_archive(source_item, raw_id, limit)
-
+    async def _search_ia(self, query: str, limit: int) -> list[dict[str, Any]]:
+        for method_name in ("search_free_books", "search_books", "search", "search_items"):
+            raw_method = getattr(self._ia_client, method_name, None)
+            if callable(raw_method):
+                try:
+                    fn = cast(AsyncCallable, raw_method)
+                    try:
+                        res = await fn(query, limit=limit)  # pyright: ignore[reportGeneralTypeIssues]
+                    except TypeError:
+                        try:
+                            res = await fn(query, max_results=limit)  # pyright: ignore[reportGeneralTypeIssues]
+                        except TypeError:
+                            res = await fn(query)  # pyright: ignore[reportGeneralTypeIssues]
+                    if isinstance(res, list):
+                        return res
+                except Exception:
+                    pass
         return []
 
     async def search(
         self,
         query: str,
-        limit: int = 10,
+        limit: int = 20,
         sources: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search across one or more sources and return normalized results.
-
-        Args:
-            query: Free-text search string.
-            limit: Maximum results per source.
-            sources: List of source strings to search. Defaults to all three.
-
-        Returns:
-            Combined list of normalized ContentItem dicts.
-        """
-        if sources is None:
-            sources = [SOURCE_GOOGLE_BOOKS, SOURCE_COMIC_VINE, SOURCE_INTERNET_ARCHIVE]
+        from src.api.routes.collections import _CATALOG_SEED
 
         results: list[dict[str, Any]] = []
+        seen_cids: set[str] = set()
 
-        if SOURCE_GOOGLE_BOOKS in sources:
+        q_clean = query.strip().lower()
+
+        # 1. Local catalog seed search
+        if q_clean:
+            for seed in _CATALOG_SEED:
+                cid = str(seed.get("content_id") or seed.get("id") or "")
+                title = str(seed.get("title") or "").lower()
+                author = str(seed.get("author") or "").lower()
+                genres = [str(g).lower() for g in seed.get("genres", [])]
+
+                if (
+                    q_clean in title
+                    or q_clean in author
+                    or any(q_clean in g for g in genres)
+                ):
+                    if cid and cid not in seen_cids:
+                        seen_cids.add(cid)
+                        results.append(self._normalize_generic_item(
+                            seed,
+                            default_source=seed.get("source", "google_books"),
+                            default_type=seed.get("content_type", "book"),
+                            is_free=bool(seed.get("is_free", False)),
+                        ))
+
+        # 2. Concurrently fetch external sources (Google Books, Comic Vine, Internet Archive)
+        per_source_limit = max(5, limit // 2)
+
+        async def _fetch_gb():
             try:
-                raw_items = await self._gb.search(query=query, max_results=limit)
-                for raw in raw_items:
-                    normalized = normalize_google_books(raw)
-                    if normalized is not None:
-                        results.append(normalized)
-            except Exception:
-                logger.warning(
-                    "Google Books search failed in router",
-                    extra={"query": query},
-                    exc_info=True,
-                )
+                gb_res = await self._gb_client.search(query, max_results=per_source_limit)
+                return [self._normalize_gb_item(item) for item in (gb_res or [])]
+            except Exception as exc:
+                logger.warning("Google Books search error", extra={"error": str(exc)})
+                return []
 
-        if SOURCE_COMIC_VINE in sources:
+        async def _fetch_cv():
             try:
-                raw_items = await self._cv.search_comics(query=query, limit=limit)
-                for raw in raw_items:
-                    normalized = normalize_comic_vine_issue(raw)
-                    if normalized is not None:
-                        results.append(normalized)
-            except Exception:
-                logger.warning(
-                    "Comic Vine search failed in router",
-                    extra={"query": query},
-                    exc_info=True,
-                )
+                cv_res = await self._search_cv(query, limit=per_source_limit)
+                return [
+                    self._normalize_generic_item(item, default_source="comic_vine", default_type="comic")
+                    for item in (cv_res or [])
+                ]
+            except Exception as exc:
+                logger.warning("Comic Vine search error", extra={"error": str(exc)})
+                return []
 
-        if SOURCE_INTERNET_ARCHIVE in sources:
+        async def _fetch_ia():
             try:
-                raw_items = await self._ia.search_free_books(query=query, limit=limit)
-                for raw in raw_items:
-                    normalized = normalize_internet_archive(raw)
-                    if normalized is not None:
-                        results.append(normalized)
-            except Exception:
-                logger.warning(
-                    "Internet Archive search failed in router",
-                    extra={"query": query},
-                    exc_info=True,
-                )
+                ia_res = await self._search_ia(query, limit=per_source_limit)
+                return [
+                    self._normalize_generic_item(item, default_source="internet_archive", default_type="book", is_free=True)
+                    for item in (ia_res or [])
+                ]
+            except Exception as exc:
+                logger.warning("Internet Archive search error", extra={"error": str(exc)})
+                return []
 
-        return results
-
-    async def _fetch_google_books(self, raw_id: str) -> Optional[dict[str, Any]]:
-        """Fetch a Google Books item — DB first, then API."""
-        existing = await get_book_by_external_id(
-            self._db,
-            external_id=raw_id,
-            external_source=SOURCE_GOOGLE_BOOKS,
+        # Run external searches in parallel
+        gb_items, cv_items, ia_items = await asyncio.gather(
+            _fetch_gb(),
+            _fetch_cv(),
+            _fetch_ia(),
+            return_exceptions=True,
         )
-        if existing is not None:
-            return _db_book_to_content_item(existing, PREFIX_GB)
 
-        raw = await self._gb.get_by_id(raw_id)
-        if raw is None:
-            return None
+        # Merge external items round-robin style (1 book, 1 comic, 1 free book)
+        external_lists = [
+            list(gb_items) if isinstance(gb_items, list) else [],
+            list(cv_items) if isinstance(cv_items, list) else [],
+            list(ia_items) if isinstance(ia_items, list) else [],
+        ]
 
-        normalized = normalize_google_books(raw)
-        if normalized is None:
-            return None
+        max_len = max((len(l) for l in external_lists), default=0)
+        for i in range(max_len):
+            for lst in external_lists:
+                if i < len(lst):
+                    item = lst[i]
+                    cid = item.get("content_id")
+                    if cid and cid not in seen_cids:
+                        seen_cids.add(cid)
+                        results.append(item)
 
-        try:
-            await upsert_book_from_google(self._db, raw)
-        except Exception:
-            logger.warning(
-                "Failed to persist Google Books item",
-                extra={"raw_id": raw_id},
-                exc_info=True,
-            )
-
-        return normalized
-
-    async def _fetch_comic_vine(self, raw_id: str) -> Optional[dict[str, Any]]:
-        """Fetch a Comic Vine item — DB first, then API."""
-        existing = await get_book_by_external_id(
-            self._db,
-            external_id=raw_id,
-            external_source=SOURCE_COMIC_VINE,
-        )
-        if existing is not None:
-            return _db_book_to_content_item(existing, PREFIX_CV)
-
-        raw = await self._cv.get_comic(raw_id)
-        if raw is None:
-            return None
-
-        normalized = normalize_comic_vine_issue(raw)
-        if normalized is None:
-            return None
-
-        try:
-            await upsert_book_from_comic_vine(self._db, raw)
-        except Exception:
-            logger.warning(
-                "Failed to persist Comic Vine item",
-                extra={"raw_id": raw_id},
-                exc_info=True,
-            )
-
-        return normalized
-
-    async def _fetch_internet_archive(self, raw_id: str) -> Optional[dict[str, Any]]:
-        """Fetch an Internet Archive item — DB first, then API."""
-        existing = await get_book_by_external_id(
-            self._db,
-            external_id=raw_id,
-            external_source=SOURCE_INTERNET_ARCHIVE,
-        )
-        if existing is not None:
-            return _db_book_to_content_item(existing, PREFIX_IA)
-
-        raw = await self._ia.get_item(raw_id)
-        if raw is None:
-            return None
-
-        normalized = normalize_internet_archive(raw)
-        if normalized is None:
-            return None
-
-        try:
-            await upsert_book_from_internet_archive(self._db, normalized)
-        except Exception:
-            logger.warning(
-                "Failed to persist Internet Archive item",
-                extra={"raw_id": raw_id},
-                exc_info=True,
-            )
-
-        return normalized
-
-    async def _similar_google_books(
-        self,
-        source_item: dict[str, Any],
-        raw_id: str,
-        limit: int,
-    ) -> list[dict[str, Any]]:
-        """Find similar books via Google Books search."""
-        parts: list[str] = []
-        authors = source_item.get("authors") or []
-        genres = source_item.get("genres") or []
-
-        if authors:
-            parts.append(authors[0])
-        if genres:
-            parts.append(genres[0])
-        if not parts:
-            parts.append(source_item.get("title", ""))
-
-        query = " ".join(parts).strip()
-        if not query:
-            return []
-
-        try:
-            raw_items = await self._gb.search(
-                query=query,
-                max_results=min(limit + 1, 40),
-            )
-        except Exception:
-            logger.warning("Google Books similar search failed", exc_info=True)
-            return []
-
-        results: list[dict[str, Any]] = []
-        for raw in raw_items:
-            if raw.get("google_books_id") == raw_id:
-                continue
-            normalized = normalize_google_books(raw)
-            if normalized is not None:
-                results.append(normalized)
-            if len(results) >= limit:
-                break
-
-        return results
-
-    async def _similar_comic_vine(
-        self,
-        source_item: dict[str, Any],
-        raw_id: str,
-        limit: int,
-    ) -> list[dict[str, Any]]:
-        """Find similar comics via Comic Vine search by series name."""
-        title = source_item.get("title", "")
-        if not title:
-            return []
-
-        try:
-            raw_items = await self._cv.search_comics(
-                query=title,
-                limit=min(limit + 1, 100),
-            )
-        except Exception:
-            logger.warning("Comic Vine similar search failed", exc_info=True)
-            return []
-
-        results: list[dict[str, Any]] = []
-        for raw in raw_items:
-            raw_item_id = str(raw.get("id", "")).replace("cv_", "").replace("cv:", "")
-            if raw_item_id == raw_id:
-                continue
-            normalized = normalize_comic_vine_issue(raw)
-            if normalized is not None:
-                results.append(normalized)
-            if len(results) >= limit:
-                break
-
-        return results
-
-    async def _similar_internet_archive(
-        self,
-        source_item: dict[str, Any],
-        raw_id: str,
-        limit: int,
-    ) -> list[dict[str, Any]]:
-        """Find similar IA items by subject."""
-        genres = source_item.get("genres") or []
-        title = source_item.get("title", "")
-        query = genres[0] if genres else title
-        if not query:
-            return []
-
-        try:
-            raw_items = await self._ia.search_free_books(
-                query=query,
-                limit=min(limit + 1, 50),
-            )
-        except Exception:
-            logger.warning("Internet Archive similar search failed", exc_info=True)
-            return []
-
-        results: list[dict[str, Any]] = []
-        for raw in raw_items:
-            raw_item_id = str(raw.get("id", "")).replace("ia_", "").replace("ia:", "")
-            if raw_item_id == raw_id:
-                continue
-            normalized = normalize_internet_archive(raw)
-            if normalized is not None:
-                results.append(normalized)
-            if len(results) >= limit:
-                break
-
-        return results
-
-def _extract_free_url(book: Any, prefix: str) -> Optional[str]:
-    """Return the free read URL for a persisted book if available."""
-    if prefix != PREFIX_IA:
-        return None
-    meta = getattr(book, "metadata_json", None) or {}
-    if isinstance(meta, dict):
-        url = meta.get("read_url") or meta.get("free_url")
-        if url:
-            return url
-    return f"https://archive.org/details/{book.external_id}"
-
-def _db_book_to_content_item(book: Any, prefix: str) -> dict[str, Any]:
-    """Convert a DB Book ORM object into a normalized ContentItem dict.
-
-    Args:
-        book: SQLAlchemy Book ORM instance.
-        prefix: Source prefix string ("gb", "cv", "ia").
-
-    Returns:
-        Normalized ContentItem dict.
-    """
-    from src.services.content_normalizer import make_content_id
-
-    content_id = make_content_id(prefix, book.external_id)
-    authors = book.authors or []
-    author_str = ", ".join(authors) if authors else None
-    is_free = book.external_source == SOURCE_INTERNET_ARCHIVE
-
-    return {
-        "content_id": content_id,
-        "external_id": book.external_id,
-        "external_source": book.external_source,
-        "title": book.title,
-        "author": author_str,
-        "authors": authors,
-        "description": book.description,
-        "cover_url": book.cover_url,
-        "cover_url_large": book.cover_url_large,
-        "content_type": "comic" if prefix == PREFIX_CV else "book",
-        "is_free": is_free,
-        "free_url": _extract_free_url(book, prefix),
-        "genres": book.genres or [],
-        "language": book.language or "en",
-        "publisher": book.publisher,
-        "published_date": str(book.published_year) if book.published_year else None,
-        "page_count": book.page_count,
-        "isbn_10": book.isbn_10,
-        "isbn_13": book.isbn_13,
-        "average_rating": float(book.average_rating) if book.average_rating else None,
-        "rating_count": book.ratings_count or 0,
-        "series_id": None,
-        "series_order": None,
-        "source": book.external_source,
-    }
+        return results[:limit]

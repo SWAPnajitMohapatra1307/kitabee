@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import {
-  ScrollView,
+  FlatList,
   View,
   Text,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useNavigation } from "@react-navigation/native"
@@ -55,17 +56,40 @@ const HomeScreen: React.FC = () => {
     loadCollections()
   }
 
-  const handleItemPress = (item: ContentItem) => {
-  navigation.navigate("BookDetail", { content_id: item.content_id })
-}
+  // Pass cached cover, title, and author to BookDetail for instant hero paint
+  const handleItemPress = useCallback(
+    (item: ContentItem) => {
+      navigation.navigate("BookDetail", {
+        content_id: item.content_id,
+        cover_url: item.cover_url ?? null,
+        title: item.title ?? null,
+        author: item.author ?? null,
+      } as any)
+    },
+    [navigation]
+  )
 
-  const handleSeeAllPress = (collection: Collection) => {
-    navigation.navigate("FullCollection", {
-      id: collection.id,
-      title: collection.title,
-      items: collection.items,
-    })
-  }
+  const handleSeeAllPress = useCallback(
+    (collection: Collection) => {
+      navigation.navigate("FullCollection", {
+        id: collection.id,
+        title: collection.title,
+        items: collection.items,
+      })
+    },
+    [navigation]
+  )
+
+  const renderRow = useCallback(
+    ({ item }: { item: Collection }) => (
+      <CollectionRow
+        collection={item}
+        onItemPress={handleItemPress}
+        onSeeAllPress={handleSeeAllPress}
+      />
+    ),
+    [handleItemPress, handleSeeAllPress]
+  )
 
   if (loading) {
     return (
@@ -132,7 +156,14 @@ const HomeScreen: React.FC = () => {
     <SafeAreaView
       style={{ flex: 1, backgroundColor: theme.background.primary }}
     >
-      <ScrollView
+      <FlatList
+        data={collections}
+        keyExtractor={(item) => item.id}
+        renderItem={renderRow}
+        initialNumToRender={3}
+        maxToRenderPerBatch={2}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === "android"}
         contentContainerStyle={{ paddingVertical: spacing.sm }}
         refreshControl={
           <RefreshControl
@@ -141,16 +172,7 @@ const HomeScreen: React.FC = () => {
             tintColor={theme.brand.primary}
           />
         }
-      >
-        {collections.map((col) => (
-          <CollectionRow
-            key={col.id}
-            collection={col}
-            onItemPress={handleItemPress}
-            onSeeAllPress={handleSeeAllPress}
-          />
-        ))}
-      </ScrollView>
+      />
     </SafeAreaView>
   )
 }

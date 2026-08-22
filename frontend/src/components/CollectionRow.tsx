@@ -1,9 +1,10 @@
-import React from "react"
+import React, { memo, useCallback } from "react"
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
+  StyleSheet,
 } from "react-native"
 import { useTheme } from "../theme/ThemeContext"
 import ContentCard from "./ContentCard"
@@ -15,12 +16,30 @@ type CollectionRowProps = {
   onSeeAllPress?: (collection: Collection) => void
 }
 
+const CARD_WIDTH = 130
+
 const CollectionRow: React.FC<CollectionRowProps> = ({
   collection,
   onItemPress,
   onSeeAllPress,
 }) => {
   const { theme, typography, spacing } = useTheme()
+
+  const renderCard = useCallback(
+    ({ item }: { item: ContentItem }) => (
+      <ContentCard item={item} onPress={onItemPress} />
+    ),
+    [onItemPress]
+  )
+
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: CARD_WIDTH + spacing.xs, // Card width (130) + marginRight spacing
+      offset: (CARD_WIDTH + spacing.xs) * index,
+      index,
+    }),
+    [spacing.xs]
+  )
 
   if (!collection.items || collection.items.length === 0) {
     return null
@@ -64,23 +83,23 @@ const CollectionRow: React.FC<CollectionRowProps> = ({
         )}
       </View>
 
-      <ScrollView
+      <FlatList
         horizontal
+        data={collection.items}
+        keyExtractor={(item) => item.content_id}
+        renderItem={renderCard}
+        initialNumToRender={5}
+        maxToRenderPerBatch={3}
+        windowSize={3}
         showsHorizontalScrollIndicator={false}
+        removeClippedSubviews={true}
+        getItemLayout={getItemLayout}
         contentContainerStyle={{
           paddingHorizontal: spacing.xs,
         }}
-      >
-        {collection.items.map((item) => (
-          <ContentCard
-            key={`${collection.id}-${item.content_id}`}
-            item={item}
-            onPress={onItemPress}
-          />
-        ))}
-      </ScrollView>
+      />
     </View>
   )
 }
 
-export default CollectionRow
+export default memo(CollectionRow)

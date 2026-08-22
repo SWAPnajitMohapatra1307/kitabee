@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import respx, pytest, pytest_asyncio, httpx; print\\('ok'\\)\")",
+      "PowerShell(python -m pytest tests/test_google_books.py -v --cov=src.external.google_books --cov-report=term-missing 2>&1 | Select-Object -Last 200)",
+      "PowerShell(python -m pytest tests/test_google_books.py --cov=src.external.google_books --cov-report=term-missing 2>&1 | Select-Object -Last 30)"
+    ]
+  }
+}

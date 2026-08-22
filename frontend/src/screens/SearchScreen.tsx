@@ -78,29 +78,37 @@ export default function SearchScreen() {
   }, [debounced]);
 
   const filteredResults = useMemo(() => {
-  let out = results;
+    let out = results;
 
-  if (contentFilter === "books") {
-    out = out.filter((r) => r.content_type === "book");
-  } else if (contentFilter === "comics") {
-    out = out.filter((r) => r.content_type === "comic");
-  }
+    if (contentFilter === "books") {
+      out = out.filter((r) => r.content_type === "book");
+    } else if (contentFilter === "comics") {
+      out = out.filter((r) => r.content_type === "comic");
+    }
 
-  if (freeOnly) {
-    out = out.filter((r) => r.is_free);
-  }
+    if (freeOnly) {
+      out = out.filter((r) => r.is_free);
+    }
 
-  return out;
-}, [results, contentFilter, freeOnly]);
+    return out;
+  }, [results, contentFilter, freeOnly]);
 
   const showEmpty =
     debounced.length >= 2 && !loading && !error && filteredResults.length === 0;
   const showHint = debounced.length < 2 && !loading;
 
-  const openDetail = (contentId: string) => {
+  // ✅ Pass cached cover, title, and author to BookDetail for instant hero paint
+  const openDetail = (item: Book) => {
+    const authorName = item.author || (item.authors && item.authors[0]) || null;
+
     (navigation as any).navigate("Home", {
       screen: "BookDetail",
-      params: { content_id: contentId },
+      params: {
+        content_id: item.content_id,
+        cover_url: item.cover_url ?? null,
+        title: item.title ?? null,
+        author: authorName ?? null,
+      },
     });
   };
 
@@ -111,9 +119,7 @@ export default function SearchScreen() {
     >
       <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
         {/* Title */}
-        <Text
-          style={[typography["display-lg"], { color: theme.text.primary }]}
-        >
+        <Text style={[typography["display-lg"], { color: theme.text.primary }]}>
           Search
         </Text>
 
@@ -283,7 +289,7 @@ export default function SearchScreen() {
           renderItem={({ item }) => (
             <SearchResultCard
               item={item}
-              onPress={() => openDetail(item.content_id)}
+              onPress={() => openDetail(item)}
             />
           )}
         />

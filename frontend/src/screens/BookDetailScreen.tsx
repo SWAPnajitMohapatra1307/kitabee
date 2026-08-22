@@ -35,48 +35,77 @@ const STATUS_OPTIONS: { key: LibraryStatus; label: string }[] = [
 ]
 
 const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
-  const { content_id } = route.params
-  const { theme, typography, spacing, rounded } = useTheme()
+  const {
+    content_id,
+    cover_url: paramCoverUrl = null,
+    title: paramTitle = null,
+    author: paramAuthor = null,
+  } = route.params ?? {}
 
+  const { theme, typography, spacing, rounded } = useTheme()
   const libraryStore = useLibraryStore()
 
-  const [book, setBook] = useState<Book | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Seed from nav params so cover/title paint instantly (often from Home image cache)
+  const [book, setBook] = useState<Book | null>(
+    paramTitle || paramCoverUrl
+      ? ({
+          content_id,
+          title: paramTitle ?? "",
+          authors: paramAuthor ? [paramAuthor] : [],
+          cover_url: paramCoverUrl,
+        } as Partial<Book> as Book)
+      : null
+  )
+  const [bookLoading, setBookLoading] = useState(!paramTitle && !paramCoverUrl)
   const [similarBooks, setSimilarBooks] = useState<Book[]>([])
   const [seriesData, setSeriesData] = useState<SeriesResponse>(null)
   const [existingRating, setExistingRating] = useState<Rating | null>(null)
   const [ratingModalVisible, setRatingModalVisible] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [coverFailed, setCoverFailed] = useState(false)
 
   const libraryItem = libraryStore.getItem(content_id)
   const inLibrary = !!libraryItem
   const currentStatus = libraryItem?.status
 
+  // Hero cover: prefer live book data, fall back to param (instant)
+  const heroCoverUrl = book?.cover_url || paramCoverUrl || null
+  const heroTitle = book?.title || paramTitle || ""
+  const heroAuthors =
+    book?.authors?.length
+      ? book.authors
+      : paramAuthor
+        ? [paramAuthor]
+        : []
+
   const loadData = useCallback(async (id: string) => {
-    setLoading(true)
     setError(null)
-    setBook(null)
-    setSimilarBooks([])
-    setSeriesData(null)
-    setExistingRating(null)
+    setCoverFailed(false)
+    // Only full-block if we have nothing to show yet
+    if (!paramTitle && !paramCoverUrl) {
+      setBookLoading(true)
+    }
 
     try {
-      const [bookData, similarData, ratingData, seriesResult] =
-        await Promise.all([
-          fetchBookById(id),
-          fetchSimilarBooks(id),
-          getMyRating(id),
-          fetchSeriesData(id).catch(() => null),
-        ])
-
+      // 1) Book first — unlock main UI ASAP
+      const bookData = await fetchBookById(id)
       setBook(bookData)
-      setSimilarBooks(similarData)
-      setExistingRating(ratingData)
-      setSeriesData(seriesResult)
+      setBookLoading(false)
 
       if (!libraryStore.loaded) {
-        await libraryStore.load()
+        libraryStore.load().catch(() => {})
       }
+
+      // 2) Secondary data in parallel (does not block cover/title)
+      const [similarData, ratingData, seriesResult] = await Promise.all([
+        fetchSimilarBooks(id).catch(() => []),
+        getMyRating(id).catch(() => null),
+        fetchSeriesData(id).catch(() => null),
+      ])
+
+      setSimilarBooks(similarData || [])
+      setExistingRating(ratingData)
+      setSeriesData(seriesResult)
     } catch (err: any) {
       console.error("Failed to load book:", err)
       setError(
@@ -84,12 +113,26 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           err?.message ||
           "Failed to load book"
       )
-    } finally {
-      setLoading(false)
+      setBookLoading(false)
     }
-  }, [])
+  }, [paramTitle, paramCoverUrl])
 
   useEffect(() => {
+    // Reset secondary state when navigating to another book
+    setSimilarBooks([])
+    setSeriesData(null)
+    setExistingRating(null)
+    setCoverFailed(false)
+    setBook(
+      paramTitle || paramCoverUrl
+        ? ({
+            content_id,
+            title: paramTitle ?? "",
+            authors: paramAuthor ? [paramAuthor] : [],
+            cover_url: paramCoverUrl,
+          } as Partial<Book> as Book)
+        : null
+    )
     loadData(content_id)
   }, [content_id])
 
@@ -100,7 +143,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
       } else {
         await libraryStore.addToLibrary(content_id, "want_to_read")
       }
-    } catch (err) {
+    } catch {
       Alert.alert("Error", "Could not update library")
     }
   }
@@ -108,15 +151,13 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
   const handleSetStatus = async (status: LibraryStatus) => {
     try {
       await libraryStore.setStatus(content_id, status)
-    } catch (err) {
+    } catch {
       Alert.alert("Error", "Could not update status")
     }
   }
 
   const handleRead = () => {
-    if (book?.free_url) {
-      Linking.openURL(book.free_url)
-    }
+    if (book?.free_url) Linking.openURL(book.free_url)
   }
 
   const handleRatingSaved = (newStars: number) => {
@@ -138,24 +179,18 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
     )
   }
 
-  const handleRatingDeleted = () => {
-    setExistingRating(null)
-  }
-
-  if (loading) {
+  // Only block entire screen if we have no params AND book hasn't loaded
+  if (bookLoading && !book && !paramCoverUrl) {
     return (
       <SafeAreaView
-        style={[
-          styles.center,
-          { backgroundColor: theme.background.primary },
-        ]}
+        style={[styles.center, { backgroundColor: theme.background.primary }]}
       >
         <ActivityIndicator color={theme.brand.primary} size="large" />
       </SafeAreaView>
     )
   }
 
-  if (error || !book) {
+  if ((error && !book) || (!book && !paramCoverUrl && !bookLoading)) {
     return (
       <SafeAreaView
         style={[
@@ -167,9 +202,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           onPress={() => navigation.goBack()}
           style={{ position: "absolute", top: spacing.lg, left: spacing.md }}
         >
-          <Text
-            style={[typography["title-md"], { color: theme.text.primary }]}
-          >
+          <Text style={[typography["title-md"], { color: theme.text.primary }]}>
             ← Back
           </Text>
         </TouchableOpacity>
@@ -191,9 +224,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
             borderRadius: rounded.md,
           }}
         >
-          <Text
-            style={[typography["title-sm"], { color: theme.text.onPrimary }]}
-          >
+          <Text style={[typography["title-sm"], { color: theme.text.onPrimary }]}>
             Retry
           </Text>
         </TouchableOpacity>
@@ -211,282 +242,330 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
           onPress={() => navigation.goBack()}
           style={{ padding: spacing.xs }}
         >
-          <Text
-            style={[typography["title-md"], { color: theme.text.primary }]}
-          >
+          <Text style={[typography["title-md"], { color: theme.text.primary }]}>
             ← Back
           </Text>
         </TouchableOpacity>
 
-        {book.cover_url ? (
-          <Image
-            source={{ uri: book.cover_url }}
-            style={[
-              styles.cover,
-              {
-                borderRadius: rounded.md,
-                alignSelf: "center",
-                marginTop: spacing.sm,
-              },
-            ]}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={[
-              styles.cover,
-              {
-                borderRadius: rounded.md,
-                alignSelf: "center",
-                marginTop: spacing.sm,
-                backgroundColor: theme.background.elevated,
-                alignItems: "center",
-                justifyContent: "center",
-              },
-            ]}
-          >
-            <Text
-              style={[typography["body-md"], { color: theme.text.muted }]}
-            >
-              No Cover
-            </Text>
-          </View>
-        )}
+       {/* Hero Cover Image in BookDetailScreen.tsx */}
+{heroCoverUrl && !coverFailed ? (
+  <Image
+    source={{ uri: heroCoverUrl }}
+    style={[
+      styles.cover,
+      {
+        borderRadius: rounded.md,
+        alignSelf: "center",
+        marginTop: spacing.sm,
+        backgroundColor: theme.background.elevated,
+      },
+    ]}
+    resizeMode="cover"
+    onError={() => setCoverFailed(true)}
+  />
+) : (
+  /* Elegant Book Cover Placeholder when image is missing or 404s */
+  <View
+    style={[
+      styles.cover,
+      {
+        borderRadius: rounded.md,
+        alignSelf: "center",
+        marginTop: spacing.sm,
+        backgroundColor: theme.brand.primary,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: spacing.sm,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 6,
+      },
+    ]}
+  >
+    <Text
+      style={[
+        typography["title-md"],
+        { color: theme.brand.onPrimary, textAlign: "center" },
+      ]}
+      numberOfLines={3}
+    >
+      {heroTitle || "Kitabee"}
+    </Text>
+    {heroAuthors.length > 0 && (
+      <Text
+        style={[
+          typography["caption-uppercase"],
+          { color: theme.brand.onPrimary, textAlign: "center", marginTop: 8, opacity: 0.8 },
+        ]}
+        numberOfLines={1}
+      >
+        {heroAuthors[0]}
+      </Text>
+    )}
+  </View>
+)}
 
         <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
-          <Text
-            style={[typography["display-md"], { color: theme.text.primary }]}
-          >
-            {book.title}
+          <Text style={[typography["display-md"], { color: theme.text.primary }]}>
+            {heroTitle || "Loading…"}
           </Text>
-          {book.authors && book.authors.length > 0 && (
+          {heroAuthors.length > 0 && (
             <Text
               style={[
                 typography["body-md"],
                 { color: theme.text.secondary, marginTop: spacing.xs },
               ]}
             >
-              {book.authors.join(", ")}
+              {heroAuthors.join(", ")}
             </Text>
           )}
         </View>
 
-        <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
-          <TouchableOpacity
-            onPress={handleLibraryToggle}
-            style={[
-              styles.button,
-              {
-                backgroundColor: inLibrary
-                  ? theme.background.elevated
-                  : theme.brand.primary,
-                borderRadius: rounded.md,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                typography["title-sm"],
-                {
-                  color: inLibrary
-                    ? theme.text.primary
-                    : theme.text.onPrimary,
-                  textAlign: "center",
-                },
-              ]}
-            >
-              {inLibrary ? "Remove from Library" : "Add to Library"}
-            </Text>
-          </TouchableOpacity>
-
-          {inLibrary && (
+        {/* Library / rating / description only when full book is in */}
+        {book && book.title ? (
+          <>
             <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                marginTop: spacing.xs,
-              }}
+              style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}
             >
-              {STATUS_OPTIONS.map((s) => {
-                const active = currentStatus === s.key
-                return (
-                  <TouchableOpacity
-                    key={s.key}
-                    onPress={() => handleSetStatus(s.key)}
-                    activeOpacity={0.7}
-                    style={{
-                      paddingHorizontal: spacing.xs,
-                      paddingVertical: 6,
-                      marginRight: 6,
-                      marginTop: 6,
-                      borderRadius: rounded.full,
-                      backgroundColor: active
-                        ? theme.brand.primary
-                        : theme.background.elevated,
-                    }}
-                  >
-                    <Text
-                      style={[
-                        typography["caption-uppercase"],
-                        {
-                          color: active
-                            ? theme.text.onPrimary
-                            : theme.text.secondary,
-                        },
-                      ]}
-                    >
-                      {s.label}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
-          )}
-        </View>
-
-        {book.is_free && book.free_url && (
-          <View
-            style={{ paddingHorizontal: spacing.md, marginTop: spacing.sm }}
-          >
-            <TouchableOpacity
-              onPress={handleRead}
-              style={[
-                styles.button,
-                {
-                  backgroundColor: theme.background.card,
-                  borderRadius: rounded.md,
-                },
-              ]}
-            >
-              <Text
+              <TouchableOpacity
+                onPress={handleLibraryToggle}
                 style={[
-                  typography["title-sm"],
-                  { color: theme.text.link, textAlign: "center" },
+                  styles.button,
+                  {
+                    backgroundColor: inLibrary
+                      ? theme.background.elevated
+                      : theme.brand.primary,
+                    borderRadius: rounded.md,
+                  },
                 ]}
               >
-                Read Free on Archive.org
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Rating section */}
-        <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
-          <Text
-            style={[
-              typography["title-sm"],
-              { color: theme.text.secondary, marginBottom: spacing.xs },
-            ]}
-          >
-            Your Rating
-          </Text>
-
-          {existingRating ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.sm,
-              }}
-            >
-              <View style={{ flexDirection: "row", gap: 4 }}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Text
-                    key={s}
-                    style={{
-                      fontSize: 24,
-                      color:
-                        s <= existingRating.rating
-                          ? theme.brand.primary
-                          : theme.text.muted,
-                    }}
-                  >
-                    ★
-                  </Text>
-                ))}
-              </View>
-              <TouchableOpacity onPress={() => setRatingModalVisible(true)}>
                 <Text
                   style={[
-                    typography["body-sm"],
-                    { color: theme.text.link },
+                    typography["title-sm"],
+                    {
+                      color: inLibrary
+                        ? theme.text.primary
+                        : theme.text.onPrimary,
+                      textAlign: "center",
+                    },
                   ]}
                 >
-                  Edit
+                  {inLibrary ? "Remove from Library" : "Add to Library"}
                 </Text>
               </TouchableOpacity>
+
+              {inLibrary && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    marginTop: spacing.xs,
+                  }}
+                >
+                  {STATUS_OPTIONS.map((s) => {
+                    const active = currentStatus === s.key
+                    return (
+                      <TouchableOpacity
+                        key={s.key}
+                        onPress={() => handleSetStatus(s.key)}
+                        activeOpacity={0.7}
+                        style={{
+                          paddingHorizontal: spacing.xs,
+                          paddingVertical: 6,
+                          marginRight: 6,
+                          marginTop: 6,
+                          borderRadius: rounded.full,
+                          backgroundColor: active
+                            ? theme.brand.primary
+                            : theme.background.elevated,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            typography["caption-uppercase"],
+                            {
+                              color: active
+                                ? theme.text.onPrimary
+                                : theme.text.secondary,
+                            },
+                          ]}
+                        >
+                          {s.label}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              )}
             </View>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setRatingModalVisible(true)}
-              style={[
-                styles.button,
-                {
-                  backgroundColor: theme.background.elevated,
-                  borderRadius: rounded.md,
-                },
-              ]}
+
+            {book.is_free && book.free_url && (
+              <View
+                style={{
+                  paddingHorizontal: spacing.md,
+                  marginTop: spacing.sm,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={handleRead}
+                  style={[
+                    styles.button,
+                    {
+                      backgroundColor: theme.background.card,
+                      borderRadius: rounded.md,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      typography["title-sm"],
+                      { color: theme.text.link, textAlign: "center" },
+                    ]}
+                  >
+                    Read Free on Archive.org
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View
+              style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}
             >
               <Text
                 style={[
                   typography["title-sm"],
-                  { color: theme.text.secondary, textAlign: "center" },
+                  { color: theme.text.secondary, marginBottom: spacing.xs },
                 ]}
               >
-                Rate this Book
+                Your Rating
               </Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        {book.description && (
-          <View
-            style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}
-          >
-            <Text
-              style={[typography["body-md"], { color: theme.text.secondary }]}
-            >
-              {book.description}
-            </Text>
-          </View>
-        )}
+              {existingRating ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.sm,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", gap: 4 }}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Text
+                        key={s}
+                        style={{
+                          fontSize: 24,
+                          color:
+                            s <= existingRating.rating
+                              ? theme.brand.primary
+                              : theme.text.muted,
+                        }}
+                      >
+                        ★
+                      </Text>
+                    ))}
+                  </View>
+                  <TouchableOpacity onPress={() => setRatingModalVisible(true)}>
+                    <Text
+                      style={[typography["body-sm"], { color: theme.text.link }]}
+                    >
+                      Edit
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setRatingModalVisible(true)}
+                  style={[
+                    styles.button,
+                    {
+                      backgroundColor: theme.background.elevated,
+                      borderRadius: rounded.md,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      typography["title-sm"],
+                      { color: theme.text.secondary, textAlign: "center" },
+                    ]}
+                  >
+                    Rate this Book
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-        {/* Series section */}
-        {seriesData && (
-          <SeriesOrderSection
-            series={seriesData}
-            currentContentId={content_id}
-            onItemPress={(id) =>
-              navigation.push("BookDetail", { content_id: id })
-            }
-          />
-        )}
+            {book.description ? (
+              <View
+                style={{
+                  paddingHorizontal: spacing.md,
+                  marginTop: spacing.md,
+                }}
+              >
+                <Text
+                  style={[
+                    typography["body-md"],
+                    { color: theme.text.secondary },
+                  ]}
+                >
+                  {book.description}
+                </Text>
+              </View>
+            ) : null}
 
-        {similarBooks.length > 0 && (
-          <View style={{ marginTop: spacing.lg }}>
-            <CollectionRow
-              collection={{
-                id: "similar",
-                title: "Similar Books",
-                mood: "",
-                item_count: similarBooks.length,
-                items: similarBooks.map((b) => ({
-                  content_id: b.content_id,
-                  title: b.title,
-                  author: (b.authors && b.authors[0]) || "",
-                  cover_url: b.cover_url ?? null,
-                  content_type: "book" as const,
-                  is_free: b.is_free,
-                  free_url: b.free_url ?? null,
-                  source: ((b as any).source ?? "google_books") as ContentSource,
-                  description: b.description ?? null,
-                  genres: (b as any).genres ?? [],
-                })),
-              }}
-              onItemPress={(item) =>
-                navigation.push("BookDetail", { content_id: item.content_id })
-              }
-            />
+            {seriesData && (
+              <SeriesOrderSection
+                series={seriesData}
+                currentContentId={content_id}
+                onItemPress={(id) =>
+                  navigation.push("BookDetail", { content_id: id })
+                }
+              />
+            )}
+
+            {similarBooks.length > 0 && (
+              <View style={{ marginTop: spacing.lg }}>
+                <CollectionRow
+                  collection={{
+                    id: "similar",
+                    title: "Similar Books",
+                    mood: "",
+                    item_count: similarBooks.length,
+                    items: similarBooks.map((b) => ({
+                      content_id: b.content_id,
+                      title: b.title,
+                      author:
+                        b.author || (b.authors && b.authors[0]) || "",
+                      cover_url: b.cover_url ?? null,
+                      content_type:
+                        b.content_type === "comic" ? "comic" : "book",
+                      is_free: !!b.is_free,
+                      free_url: b.free_url ?? null,
+                      source: (b.source ||
+                        (b as any).external_source ||
+                        "google_books") as ContentSource,
+                      description: b.description ?? null,
+                      genres: b.genres ?? [],
+                    })),
+                  }}
+                  onItemPress={(item) =>
+                    navigation.push("BookDetail", {
+                      content_id: item.content_id,
+                      cover_url: item.cover_url ?? null,
+                      title: item.title ?? null,
+                      author: item.author ?? null,
+                    })
+                  }
+                />
+              </View>
+            )}
+          </>
+        ) : (
+          // Soft loading under the already-visible cover
+          <View style={{ paddingVertical: spacing.lg, alignItems: "center" }}>
+            <ActivityIndicator color={theme.brand.primary} />
           </View>
         )}
       </ScrollView>
@@ -497,7 +576,7 @@ const BookDetailScreen: React.FC<any> = ({ route, navigation }) => {
         existingRating={existingRating}
         onClose={() => setRatingModalVisible(false)}
         onSaved={handleRatingSaved}
-        onDeleted={handleRatingDeleted}
+        onDeleted={() => setExistingRating(null)}
       />
     </SafeAreaView>
   )

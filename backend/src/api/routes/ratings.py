@@ -1,15 +1,4 @@
-"""API routes for the ratings feature.
-
-Endpoints:
-    POST   /api/v1/books/{content_id}/ratings    — create or update a rating
-    GET    /api/v1/books/{content_id}/ratings/me — get my rating for a book
-    DELETE /api/v1/books/{content_id}/ratings/me — delete my rating
-    GET    /api/v1/users/me/ratings               — get all my ratings (paginated)
-
-content_id uses the prefixed convention: gb:{id}, cv:{id}, ia:{id}.
-The route layer resolves content_id to an internal book UUID before
-passing to the service layer. The DB schema is unchanged.
-"""
+"""API routes for the ratings feature."""
 
 from __future__ import annotations
 
@@ -19,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_db, get_content_router
+from src.api.deps import get_content_router, get_db
 from src.api.response import success_envelope
 from src.auth.dependencies import get_current_user
 from src.database.models.user import User
@@ -36,60 +25,38 @@ async def _resolve_to_book_uuid(
     content_id: str,
     content_router: ContentRouter,
     rating_service: RatingService,
-) -> UUID:
+    create_if_missing: bool = False,
+) -> UUID | None:
     """Resolve a content_id to an internal book UUID.
 
-    Fetch-and-persist strategy:
-        1. Parse and validate the content_id format.
-        2. Check DB for existing book record.
-        3. If not in DB, fetch from external API (persists as side-effect).
-        4. Return internal UUID.
-
-    Args:
-        content_id: Prefixed content identifier.
-        content_router: For fetching from external APIs if needed.
-        rating_service: For DB resolution.
-
-    Returns:
-        Internal book UUID.
-
-    Raises:
-        HTTPException 400: When content_id format is invalid.
-        HTTPException 404: When content cannot be found in any source.
+    Strategy:
+        1. Check DB for existing book record.
+        2. If missing and create_if_missing is True:
+           - Fetch item metadata via ContentRouter (or catalog)
+           - Upsert book into Postgres DB and return new UUID.
+        3. If missing and create_if_missing is False, return None.
     """
-    if parse_content_id(content_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "INVALID_CONTENT_ID",
-                "message": f"Invalid content_id format: '{content_id}'.",
-            },
-        )
-
+    # 1. Check existing DB
     book_uuid = await rating_service.resolve_content_id(content_id)
+    if book_uuid is not None:
+        return book_uuid
 
-    if book_uuid is None:
+    # 2. If not in DB yet and creation requested (e.g. rate POST)
+    if create_if_missing:
         item = await content_router.get_by_content_id(content_id)
-        if item is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "code": "CONTENT_NOT_FOUND",
-                    "message": f"No content found with id {content_id}.",
-                },
-            )
-        book_uuid = await rating_service.resolve_content_id(content_id)
+        if item is not None:
+            book_uuid = await rating_service.ensure_book_in_db(item)
+            return book_uuid
 
-    if book_uuid is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 "code": "CONTENT_NOT_FOUND",
-                "message": f"Content {content_id} could not be resolved to a book record.",
+                "message": f"No content found with id {content_id}.",
             },
         )
 
-    return book_uuid
+    return None
 
 
 @router.post(
@@ -106,7 +73,18 @@ async def rate_book(
     user_id: UUID = current_user.id
 
     service = RatingService(db)
-    book_uuid = await _resolve_to_book_uuid(content_id, content_router, service)
+    book_uuid = await _resolve_to_book_uuid(
+        content_id, content_router, service, create_if_missing=True
+    )
+
+    if book_uuid is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "CONTENT_NOT_FOUND",
+                "message": f"Content {content_id} could not be resolved to a book record.",
+            },
+        )
 
     rating = await service.rate_book(
         user_id=user_id,
@@ -129,7 +107,18 @@ async def get_my_book_rating(
     user_id: UUID = current_user.id
 
     service = RatingService(db)
-    book_uuid = await _resolve_to_book_uuid(content_id, content_router, service)
+    book_uuid = await _resolve_to_book_uuid(
+        content_id, content_router, service, create_if_missing=False
+    )
+
+    if book_uuid is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "RATING_NOT_FOUND",
+                "message": "You have not rated this content.",
+            },
+        )
 
     rating = await service.get_my_rating(
         user_id=user_id,
@@ -159,7 +148,18 @@ async def delete_my_book_rating(
     user_id: UUID = current_user.id
 
     service = RatingService(db)
-    book_uuid = await _resolve_to_book_uuid(content_id, content_router, service)
+    book_uuid = await _resolve_to_book_uuid(
+        content_id, content_router, service, create_if_missing=False
+    )
+
+    if book_uuid is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "RATING_NOT_FOUND",
+                "message": "You have not rated this content.",
+            },
+        )
 
     deleted = await service.delete_my_rating(
         user_id=user_id,

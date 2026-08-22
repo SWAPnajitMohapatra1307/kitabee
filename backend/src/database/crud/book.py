@@ -15,6 +15,8 @@ from src.database.base import Book
 
 
 GOOGLE_BOOKS_SOURCE = "google_books"
+COMIC_VINE_SOURCE = "comic_vine"
+INTERNET_ARCHIVE_SOURCE = "internet_archive"
 
 _MUTABLE_FIELDS = (
     "title",
@@ -49,11 +51,6 @@ def _extract_published_year(published_date: Any) -> Optional[int]:
 
 
 def _build_google_metadata(data: dict[str, Any]) -> dict[str, Any]:
-    """Build the JSONB metadata payload for Google Books rows.
-
-    Persists preview_link, info_link, and seriesInfo (when present)
-    under the google_books key.
-    """
     google_books_meta: dict[str, Any] = {}
 
     preview_link = data.get("preview_link")
@@ -75,11 +72,6 @@ def _build_google_metadata(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_comic_vine_metadata(data: dict[str, Any]) -> dict[str, Any]:
-    """Build the JSONB metadata payload for Comic Vine rows.
-
-    Persists volume (id + name) and issue_number under the comic_vine key.
-    These are required by SeriesDetector Rule 1.
-    """
     comic_vine_meta: dict[str, Any] = {}
 
     volume = data.get("volume")
@@ -106,23 +98,23 @@ def _to_decimal(value: Any) -> Optional[Decimal]:
 
 
 def _book_kwargs_from_google(data: dict[str, Any]) -> dict[str, Any]:
-    external_id = data.get("google_books_id")
+    external_id = data.get("google_books_id") or data.get("external_id")
     if not external_id:
-        raise ValueError("google_books_id is required to persist a book")
+        raise ValueError("external_id or google_books_id is required to persist a book")
 
     now = datetime.now(timezone.utc)
 
     small_thumbnail_url = data.get("small_thumbnail_url")
-    thumbnail_url = data.get("thumbnail_url")
+    thumbnail_url = data.get("thumbnail_url") or data.get("cover_url")
 
     return {
-        "external_id": external_id,
+        "external_id": str(external_id),
         "external_source": GOOGLE_BOOKS_SOURCE,
         "title": data.get("title") or "Unknown Title",
         "subtitle": data.get("subtitle"),
         "authors": data.get("authors") or [],
         "description": data.get("description"),
-        "genres": data.get("categories") or [],
+        "genres": data.get("categories") or data.get("genres") or [],
         "tags": [],
         "isbn_10": data.get("isbn_10"),
         "isbn_13": data.get("isbn_13"),
@@ -167,6 +159,73 @@ async def get_book_by_external_id(
     return result.scalar_one_or_none()
 
 
+async def create_book(
+    db: AsyncSession,
+    *,
+    external_id: str,
+    external_source: str = GOOGLE_BOOKS_SOURCE,
+    title: str = "Unknown Title",
+    authors: Optional[list[str]] = None,
+    cover_url: Optional[str] = None,
+    description: Optional[str] = None,
+    genres: Optional[list[str]] = None,
+    content_type: str = "book",
+    is_free: bool = False,
+    free_url: Optional[str] = None,
+) -> Book:
+    """Create or return existing book by external_id and external_source."""
+    existing = await get_book_by_external_id(
+        db, external_id=external_id, external_source=external_source
+    )
+    if existing is not None:
+        return existing
+
+    now = datetime.now(timezone.utc)
+    metadata: dict[str, Any] = {}
+    if free_url:
+        metadata["read_url"] = free_url
+
+    book = Book(
+        external_id=external_id,
+        external_source=external_source,
+        title=title,
+        subtitle=None,
+        authors=authors or [],
+        description=description,
+        genres=genres or [],
+        tags=[],
+        isbn_10=None,
+        isbn_13=None,
+        published_year=None,
+        publisher=None,
+        page_count=None,
+        language="en",
+        cover_url=cover_url,
+        cover_url_large=cover_url,
+        average_rating=None,
+        ratings_count=0,
+        kitabee_rating=None,
+        kitabee_ratings_count=0,
+        metadata_json=metadata,
+        cached_at=now,
+        updated_at=now,
+    )
+    db.add(book)
+
+    try:
+        await db.commit()
+        await db.refresh(book)
+        return book
+    except IntegrityError:
+        await db.rollback()
+        existing = await get_book_by_external_id(
+            db, external_id=external_id, external_source=external_source
+        )
+        if existing is None:
+            raise
+        return existing
+
+
 async def upsert_book_from_google(
     db: AsyncSession,
     data: dict[str, Any],
@@ -207,19 +266,7 @@ async def upsert_book_from_google(
         return existing
 
 
-COMIC_VINE_SOURCE = "comic_vine"
-INTERNET_ARCHIVE_SOURCE = "internet_archive"
-
-
 def _book_kwargs_from_comic_vine(data: dict[str, Any]) -> dict[str, Any]:
-    """Translate Comic Vine normalized data into Book ORM fields.
-
-    Expects output from ComicVineClient._map_issue() which now provides:
-    - external_id: raw numeric id as string
-    - volume: dict with id + name (for series detection)
-    - issue_number: string
-    - cover_url / cover_url_large: image urls
-    """
     external_id = data.get("external_id")
     if not external_id:
         raise ValueError("external_id is required to persist a Comic Vine item")

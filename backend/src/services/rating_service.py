@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
-from uuid import UUID
+from datetime import datetime, timezone
+from typing import Any
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.crud.book import get_book_by_external_id
+from src.database.crud.book import get_book_by_external_id, _extract_published_year
 from src.database.crud.rating import (
     delete_rating,
     get_rating,
@@ -15,9 +17,10 @@ from src.database.crud.rating import (
     recalculate_book_stats,
     upsert_rating,
 )
+from src.database.models.book import Book
 from src.database.models.rating import Rating
 from src.schemas.rating import RatingCreate
-from src.services.content_normalizer import parse_content_id, get_source_for_prefix
+from src.services.content_normalizer import get_source_for_prefix, parse_content_id
 
 logger = logging.getLogger(__name__)
 
@@ -33,25 +36,14 @@ class RatingService:
 
         Looks up the book in the DB by external_id + external_source.
         Returns None when the book has not been persisted yet.
-
-        Args:
-            content_id: Prefixed ID like "gb:ByLKDQAAQBAJ".
-
-        Returns:
-            Internal book UUID, or None when not found in DB.
         """
         parsed = parse_content_id(content_id)
         if parsed is None:
-            logger.warning(
-                "Invalid content_id in rating resolution",
-                extra={"content_id": content_id},
-            )
-            return None
-
-        prefix, raw_id = parsed
-        source = get_source_for_prefix(prefix)
-        if source is None:
-            return None
+            raw_id = content_id
+            source = "google_books"
+        else:
+            prefix, raw_id = parsed
+            source = get_source_for_prefix(prefix) or "google_books"
 
         book = await get_book_by_external_id(
             self._db,
@@ -61,12 +53,72 @@ class RatingService:
 
         if book is None:
             logger.info(
-                "Book not in DB for rating — not yet fetched via detail endpoint",
+                "Book not in DB for rating — not yet persisted",
                 extra={"content_id": content_id},
             )
             return None
 
         return book.id
+
+    async def ensure_book_in_db(self, item: dict[str, Any]) -> UUID:
+        """Ensure a book item exists in the DB, creating it if missing."""
+        content_id = str(item.get("content_id") or item.get("id") or "")
+        parsed = parse_content_id(content_id)
+
+        if parsed is None:
+            raw_id = str(item.get("external_id") or content_id)
+            source = str(item.get("external_source") or item.get("source") or "google_books")
+        else:
+            prefix, raw_id = parsed
+            source = get_source_for_prefix(prefix) or "google_books"
+
+        # Check again in case it was created concurrently
+        existing = await get_book_by_external_id(
+            self._db,
+            external_id=raw_id,
+            external_source=source,
+        )
+        if existing is not None:
+            return existing.id
+
+        # Determine authors list
+        authors_list: list[str] = []
+        raw_authors = item.get("authors")
+        if isinstance(raw_authors, list):
+            authors_list = [str(a) for a in raw_authors if a]
+        elif isinstance(raw_authors, str) and raw_authors:
+            authors_list = [raw_authors]
+
+        if not authors_list:
+            single_author = item.get("author")
+            if single_author:
+                authors_list = [str(single_author)]
+
+        now = datetime.now(timezone.utc)
+
+        new_book = Book(
+            id=uuid4(),
+            external_id=raw_id,
+            external_source=source,
+            title=item.get("title") or "Untitled",
+            authors=authors_list,
+            description=item.get("description"),
+            cover_url=item.get("cover_url"),
+            cover_url_large=item.get("cover_url_large") or item.get("cover_url"),
+            genres=item.get("genres") or [],
+            published_year=_extract_published_year(item.get("published_date")),
+            cached_at=now,
+            updated_at=now,
+        )
+
+        self._db.add(new_book)
+        await self._db.commit()
+        await self._db.refresh(new_book)
+        logger.info(
+            "Created new book record in DB for seed/external content",
+            extra={"content_id": content_id, "book_id": str(new_book.id)},
+        )
+        return new_book.id
 
     async def rate_book(
         self,
@@ -75,16 +127,7 @@ class RatingService:
         book_id: UUID,
         payload: RatingCreate,
     ) -> Rating:
-        """Create or update a rating, then refresh book stats.
-
-        Args:
-            user_id: Internal user UUID.
-            book_id: Internal book UUID (resolved from content_id at route layer).
-            payload: Rating data from request body.
-
-        Returns:
-            Persisted Rating ORM instance.
-        """
+        """Create or update a rating, then refresh book stats."""
         rating = await upsert_rating(
             self._db,
             user_id=user_id,
@@ -105,15 +148,7 @@ class RatingService:
         user_id: UUID,
         book_id: UUID,
     ) -> Rating | None:
-        """Return the current user's rating for a book, or None.
-
-        Args:
-            user_id: Internal user UUID.
-            book_id: Internal book UUID.
-
-        Returns:
-            Rating ORM instance, or None when not found.
-        """
+        """Return the current user's rating for a book, or None."""
         return await get_rating(self._db, user_id=user_id, book_id=book_id)
 
     async def delete_my_rating(
@@ -122,15 +157,7 @@ class RatingService:
         user_id: UUID,
         book_id: UUID,
     ) -> bool:
-        """Delete the current user's rating for a book.
-
-        Args:
-            user_id: Internal user UUID.
-            book_id: Internal book UUID.
-
-        Returns:
-            True when deleted, False when no rating existed.
-        """
+        """Delete the current user's rating for a book."""
         deleted = await delete_rating(self._db, user_id=user_id, book_id=book_id)
         if deleted:
             await recalculate_book_stats(self._db, book_id=book_id)
@@ -144,16 +171,7 @@ class RatingService:
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[Rating], int]:
-        """Return paginated list of all ratings by the current user.
-
-        Args:
-            user_id: Internal user UUID.
-            limit: Page size.
-            offset: Results to skip.
-
-        Returns:
-            Tuple of (ratings list, total count).
-        """
+        """Return paginated list of all ratings by the current user."""
         return await get_ratings_by_user(
             self._db,
             user_id=user_id,

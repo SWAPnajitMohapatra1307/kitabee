@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.crud.book import get_book_by_external_id
+from src.database.crud.book import create_book, get_book_by_external_id
 from src.database.crud.library import (
     create_library_item,
     delete_library_item,
@@ -19,6 +19,7 @@ from src.database.crud.library import (
 from src.database.models.library_item import Library, LibraryStatus
 from src.schemas.library import LibraryItemAdd, LibraryItemUpdate
 from src.services.content_normalizer import parse_content_id, get_source_for_prefix
+from src.services.content_router import ContentRouter
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class LibraryService:
 
         if book is None:
             logger.info(
-                "Book not in DB for library — fetch via detail endpoint first",
+                "Book not in DB for library — needs upsert into Postgres",
                 extra={"content_id": content_id},
             )
             return None
@@ -76,12 +77,12 @@ class LibraryService:
         *,
         user_id: UUID,
         payload: LibraryItemAdd,
-        content_router: object,
+        content_router: ContentRouter,
     ) -> Library:
         """Add a content item to the user's library.
 
         Resolves content_id to an internal book UUID. If the book is not
-        yet in the DB, fetches it from the external API first.
+        yet in the DB, fetches it from ContentRouter and auto-upserts it to Postgres.
 
         Args:
             user_id: UUID of the authenticated user.
@@ -96,7 +97,8 @@ class LibraryService:
             HTTPException 404: When content cannot be found.
             HTTPException 409: When book is already in library.
         """
-        if parse_content_id(payload.content_id) is None:
+        parsed = parse_content_id(payload.content_id)
+        if parsed is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -105,11 +107,15 @@ class LibraryService:
                 },
             )
 
+        prefix, raw_id = parsed
+        source = get_source_for_prefix(prefix) or "google_books"
+
         book_uuid = await self.resolve_content_id(payload.content_id)
 
+        # If book is not in PostgreSQL yet, fetch metadata and INSERT it into DB
         if book_uuid is None:
             item = await content_router.get_by_content_id(payload.content_id)
-            if item is None:
+            if not item:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail={
@@ -117,7 +123,42 @@ class LibraryService:
                         "message": f"No content found with id {payload.content_id}.",
                     },
                 )
-            book_uuid = await self.resolve_content_id(payload.content_id)
+
+            # Auto-upsert into Postgres books table with clean typing
+            title = str(item.get("title") or "Unknown Title")
+            
+            raw_authors = item.get("authors")
+            authors_list: list[str] = []
+            if isinstance(raw_authors, list):
+                authors_list = [str(a) for a in raw_authors if a is not None]
+            elif item.get("author"):
+                authors_list = [str(item["author"])]
+
+            raw_genres = item.get("genres")
+            genres_list: list[str] = []
+            if isinstance(raw_genres, list):
+                genres_list = [str(g) for g in raw_genres if g is not None]
+
+            cover_url = str(item["cover_url"]) if item.get("cover_url") else None
+            description = str(item["description"]) if item.get("description") else None
+            content_type = str(item.get("content_type") or "book")
+            is_free = bool(item.get("is_free", False))
+            free_url = str(item["free_url"]) if item.get("free_url") else None
+
+            new_book = await create_book(
+                self.db,
+                external_id=raw_id,
+                external_source=source,
+                title=title,
+                authors=authors_list,
+                cover_url=cover_url,
+                description=description,
+                genres=genres_list,
+                content_type=content_type,
+                is_free=is_free,
+                free_url=free_url,
+            )
+            book_uuid = new_book.id
 
         if book_uuid is None:
             raise HTTPException(

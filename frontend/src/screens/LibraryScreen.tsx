@@ -80,10 +80,18 @@ const LibraryScreen: React.FC = () => {
     return items.filter((i) => i.status === filter);
   }, [items, filter]);
 
+  // Pass cached cover, title, and author to BookDetail for instant hero paint
   const openDetail = (item: LibraryItem) => {
+    const authorName = item.authors && item.authors.length > 0 ? item.authors[0] : null;
+
     navigation.navigate("Home", {
       screen: "BookDetail",
-      params: { content_id: item.content_id },
+      params: {
+        content_id: item.content_id,
+        cover_url: item.cover_url ?? null,
+        title: item.title ?? null,
+        author: authorName ?? null,
+      },
     });
   };
 
