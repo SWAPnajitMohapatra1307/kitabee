@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { clearAuthToken } from "../services/api";
 
 export interface User {
   id: string;
@@ -17,8 +18,10 @@ export interface User {
 interface UserStore {
   user: User | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
   setUser: (user: User | null) => void;
-  logout: () => void;
+  setHasHydrated: (value: boolean) => void;
+  logout: () => Promise<void>;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -26,12 +29,32 @@ export const useUserStore = create<UserStore>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      setUser: (user) => set({ user, isAuthenticated: !!user }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      hasHydrated: false,
+
+      setUser: (user) =>
+        set({
+          user,
+          isAuthenticated: !!user,
+        }),
+
+      setHasHydrated: (value) => set({ hasHydrated: value }),
+
+      logout: async () => {
+        await clearAuthToken();
+        set({ user: null, isAuthenticated: false });
+      },
     }),
     {
       name: "kitabee-user",
       storage: createJSONStorage(() => AsyncStorage),
+      // Only persist what matters for routing
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
