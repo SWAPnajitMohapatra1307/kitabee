@@ -90,14 +90,24 @@ export default function RateInitialContentScreen() {
     );
   };
 
-  const handleFinish = async () => {
+   const handleFinish = async () => {
     setCompleting(true);
     try {
       if (ratedCount > 0) await submitRatings();
       await api.post("/users/me/preferences/complete");
       const meRes = await api.get("/users/me");
-      setUser(meRes.data.data);
+      
+      // Robust payload extraction matching RootNavigator
+      const updatedUser = meRes.data?.data ?? meRes.data?.user ?? meRes.data;
+      
+      if (updatedUser && typeof updatedUser === "object") {
+        setUser({
+          ...updatedUser,
+          onboarding_completed: true,
+        });
+      }
     } catch (err: any) {
+      console.error("Finish onboarding error:", err);
       Alert.alert("Error", "Something went wrong. Try again.");
       setCompleting(false);
     }
