@@ -1,5 +1,5 @@
 from functools import lru_cache
-
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,10 +28,25 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def assemble_db_connection(cls, v: str) -> str:
+        if isinstance(v, str):
+            # Convert postgres:// or postgresql:// to postgresql+asyncpg://
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+                v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+            
+            # Ensure ssl=require for asyncpg if sslmode=require is present
+            if "sslmode=require" in v and "ssl=" not in v:
+                v = v.replace("sslmode=require", "ssl=require")
+        return v
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # type: ignore[call-arg]
 
 
 settings = get_settings()

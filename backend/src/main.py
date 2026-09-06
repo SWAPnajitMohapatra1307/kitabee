@@ -105,20 +105,20 @@ async def http_exception_handler(
     exc: HTTPException,
 ) -> JSONResponse:
     """Convert HTTPException into the standard error envelope."""
-    if isinstance(exc.detail, dict) and "code" in exc.detail and "message" in exc.detail:
-        code = exc.detail["code"]
-        message = exc.detail["message"]
-        details = exc.detail.get("details")
+    detail = exc.detail
+    if isinstance(detail, dict) and "code" in detail and "message" in detail:
+        code = str(detail.get("code"))
+        message = str(detail.get("message"))
+        details = detail.get("details")
     else:
         code = _default_code_for_status(exc.status_code)
-        message = str(exc.detail) if exc.detail is not None else "An error occurred."
+        message = str(detail) if detail is not None else "An error occurred."
         details = None
 
     return JSONResponse(
         status_code=exc.status_code,
         content=error_envelope(code=code, message=message, details=details),
     )
-
 
 def _default_code_for_status(status_code: int) -> str:
     """Map an HTTP status code to a default machine-readable error code."""

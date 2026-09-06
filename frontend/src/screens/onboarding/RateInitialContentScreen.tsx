@@ -90,16 +90,14 @@ export default function RateInitialContentScreen() {
     );
   };
 
-   const handleFinish = async () => {
+     const handleFinish = async () => {
     setCompleting(true);
     try {
       if (ratedCount > 0) await submitRatings();
       await api.post("/users/me/preferences/complete");
       const meRes = await api.get("/users/me");
       
-      // Robust payload extraction matching RootNavigator
       const updatedUser = meRes.data?.data ?? meRes.data?.user ?? meRes.data;
-      
       if (updatedUser && typeof updatedUser === "object") {
         setUser({
           ...updatedUser,
@@ -112,7 +110,6 @@ export default function RateInitialContentScreen() {
       setCompleting(false);
     }
   };
-
   const renderStars = (item: SeedItem) => (
     <View style={styles.stars}>
       {[1, 2, 3, 4, 5].map((star) => (
