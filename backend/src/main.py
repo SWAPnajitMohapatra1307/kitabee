@@ -74,12 +74,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── CORS Configuration ──
+# allow_origin_regex dynamically validates any HTTP/HTTPS origin (localhost, web, mobile)
+# while supporting allow_credentials=True without violating the browser CORS spec.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?:\/\/.*",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 
@@ -119,6 +124,7 @@ async def http_exception_handler(
         status_code=exc.status_code,
         content=error_envelope(code=code, message=message, details=details),
     )
+
 
 def _default_code_for_status(status_code: int) -> str:
     """Map an HTTP status code to a default machine-readable error code."""
