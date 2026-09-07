@@ -1,13 +1,14 @@
 import axios, { AxiosInstance } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE_URL = "http://192.168.1.6:8000/api/v1";
+const PROD_API_URL = "https://kitabee.onrender.com/api/v1";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || PROD_API_URL;
 
 const TOKEN_KEY = "kitabee_access_token";
 
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -21,7 +22,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// NOTE: intentionally do NOT clear token on 401.
+// NOTE: Intentionally do NOT clear token on 401.
 // Auto-clearing causes cascade failures: one stale request nukes
 // the token and every subsequent call fails with 403.
 // Token lifecycle is managed explicitly by auth flows (login/logout).
